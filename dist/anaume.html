@@ -193,6 +193,7 @@ table.eval{width:100%;border-collapse:collapse;font-size:13px}
     <div class="m"><span>迷走記録</span><b id="mWaste">0</b></div>
     <div class="m" id="mComplaintBox" hidden><span>苦情</span><b id="mComplaint">0</b></div>
     <div class="m" id="mStallBox" hidden><span>最長停止</span><b id="mStall">0秒</b></div>
+    <div class="m" id="mWallsBox" hidden><span>塀の状態</span><b id="mWalls">0件</b></div>
   </div>
   <div class="speed panel">
     <button type="button" id="pauseBtn" aria-pressed="false">停止</button>
@@ -539,18 +540,24 @@ function wallPiece(col){if(!wallMat[col])wallMat[col]=new THREE.MeshStandardMate
   [[-0.6,-0.6],[0.6,-0.6],[-0.6,0.6],[0.6,0.6]].forEach(([x,z])=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.5,0.16),m);p.position.set(x,0.75,z);p.castShadow=true;g.add(p);});
   [0.45,1.1].forEach(y=>{[[0,-0.6,1.3,0.1],[0,0.6,1.3,0.1],[-0.6,0,0.1,1.3],[0.6,0,0.1,1.3]].forEach(([x,z,w,d])=>{const r=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),m);r.position.set(x,y,z);r.castShadow=true;g.add(r);});});
   return g;}
-function buildWall(owner,coords){const w={id:++wallSeq,owner,coords,cells:[],cls:S.defaultCls,builtAt:S.t,claim:0,meshes:[],label:null};
+function buildWall(owner,coords){const w={id:++wallSeq,owner,coords,cells:[],cls:S.defaultCls,builtAt:S.t,claim:0,unreach:0,meshes:[],label:null};
   for(const [i,j] of coords){const c=C(i,j);if(!c||c.wall||c.bld||occ[idx(i,j)])continue;c.wall=w;c.claim=0;w.cells.push(c);touch(c);
     const m=wallPiece(owner.color);m.position.set(W(i),top(c),W(j));scene.add(m);w.meshes.push(m);}
   if(!w.cells.length)return null;
   w.label=makeLabel(CLS[w.cls].t,'#fff',CLS[w.cls].bg,3.4);const c0=w.cells[0];w.label.position.set(W(c0.i),top(c0)+2.4,W(c0.j));scene.add(w.label);
   walls.push(w);S.wallsBuilt++;emit(W(c0.i),top(c0)+1,W(c0.j),0x8a6a40,14,1.2,3);
-  if(!S.said.wall){S.said.wall=true;showMemo('公社メモ：住民が道路に塀を建てた。ロボットの規則では、道をふさぐ物はすべて「障害物」です。塀ごとの扱いは「障害物分類」で、これから建つ塀の扱いは「新しい塀」ボタンで変えられます。','obst','障害物分類を選ぶ');}
+  if(!S.said.wall){S.said.wall=true;
+     // Show the first disputed wall: otherwise it is easy to miss on mobile.
+     const offset=camera.position.clone().sub(controls.target);
+     controls.target.set(W(c0.i),top(c0),W(c0.j));
+     camera.position.copy(controls.target).add(offset);controls.update();
+     showMemo('公社メモ：住民が道路に塀を建てた。ロボットはこれを「撤去予定」と判断しました。塀を分類し直すには「障害物分類」を選び、塀のマスをタップしてください。「新しい塀」は今後建つ塀の初期設定です。','obst','障害物分類を選ぶ');}
   return w;}
-function removeWall(w,by){w.cells.forEach(c=>{c.wall=null;touch(c);});w.meshes.forEach(m=>scene.remove(m));if(w.label)scene.remove(w.label);walls.splice(walls.indexOf(w),1);
+function removeWall(w,by){if(!walls.includes(w))return;
+   w.cells.forEach(c=>{c.wall=null;touch(c);});w.meshes.forEach(m=>scene.remove(m));if(w.label)scene.remove(w.label);walls.splice(walls.indexOf(w),1);
   const c0=w.cells[0];emit(W(c0.i),top(c0)+0.8,W(c0.j),0x8a6a40,20,1.6,3);
   if(by==='robot'){S.wallsRemoved++;w.owner.onRemoved(w);}else S.selfRemoved++;}
-function setWallCls(w,cls){w.cls=cls;setLabel(w.label,CLS[cls].t,'#fff',CLS[cls].bg);if(cls!=='remove')w.claim=0;}
+function setWallCls(w,cls){w.cls=cls;w.unreach=0;setLabel(w.label,CLS[cls].t,'#fff',CLS[cls].bg);if(cls!=='remove')w.claim=0;}
 function addOwner(o,k){const {root,parts}=makePerson(o.skin);const tag=makeLabel(o.name+'さん','#fff',o.tag,1.9);tag.position.y=1.95;root.add(tag);
   const a={id:nextId++,robot:false,kind:'owner',name:o.name+'さん（地主）',root,parts,state:'idle',path:[],speed:1.9,timer:0,talk:0,phase:rnd(0,6),jobs:[],anger:0,lastRemoved:-999,color:o.color,home:C(o.home[0],o.home[1]),doing:'自宅にいる',job:null};
   a.onRemoved=w=>{a.anger++;a.lastRemoved=S.t;S.complaints++;S.money-=8;S.spent+=8;say(a.root,a.anger>1?'また勝手に撤去したな！倍にしてやる':'勝手に塀を撤去するな！','alarm');
@@ -562,7 +569,10 @@ function addOwner(o,k){const {root,parts}=makePerson(o.skin);const tag=makeLabel
     if(S.complaints===2)showMemo('公社メモ：撤去するたびに苦情が入り、塀は建て直されます。「保留」にした塀は、地主の気が済めば自分で外します。運搬車は道路しか走れないので、塀を残すなら「迂回路」を敷く手もあります。','obst','障害物分類を選ぶ');};
   scene.add(root);placeAt(a,a.home);agents.push(a);return a;}
 function stepOwner(a,dt){a.phase+=dt*8;let moving=false;
-  if(a.needReplan){a.needReplan=false;a.path=[];a.state='idle';a.timer=1;}
+  if(a.needReplan){a.needReplan=false;a.path=[];
+    // Preserve the pending construction/removal job when a wall invalidates the route.
+    if(a.job){a.job.at=S.t+2;a.jobs.unshift(a.job);a.job=null;}
+    a.state='idle';a.timer=1;}
   if(a.state==='idle'){a.timer-=dt;
     // a 'hold' wall comes down by the owner's own hand once he has calmed down
     for(const w of walls){if(w.owner===a&&w.cls==='hold'&&!w.unbuild&&S.t-w.builtAt>35&&S.t-a.lastRemoved>35){w.unbuild=true;a.jobs.push({type:'unbuild',wall:w,at:S.t,line:'まあ、今回は譲るか'});}}
@@ -624,6 +634,11 @@ function nearestPile(a,target){let best=null,bs=1e9;for(const c of cells){if(c.t
 function stepFiller(a,dt){
   a.talk-=dt;S.botT+=dt;
   if(a.needReplan){a.needReplan=false;releaseRes(a);
+    if(a.state==='toWall'){
+      // An unreachable wall must not keep its reservation forever.
+      if(a.wtarget){a.wtarget.claim=0;a.wtarget.unreach=S.t+4;}
+      a.wtarget=null;a.path=[];a.state='seek';a.timer=0.4;setReason(a,'経路なし');
+    }
     if(a.state==='toSource'&&a.source){if(!goAdj(a,a.source)){a.source.unreach=S.t+6;setReason(a,'経路なし');a.state='seek';}}
     else if(a.state==='toHole'&&a.target){if(!goAdj(a,a.target)){a.target.unreach=S.t+6;a.target.claim=0;a.target=null;setReason(a,'経路なし');abortTrip(a);a.state='seek';}}
     else a.state='seek';}
@@ -634,8 +649,11 @@ function stepFiller(a,dt){
   if(a.state==='seek'){
     a.timer-=dt;if(a.timer>0)return;
     // obstacles classified "remove" are jobs too
-    let bw=null,bws=1e9;for(const w of walls){if(w.cls!=='remove'||(w.claim&&w.claim!==a.id))continue;const d=md(w.cells[0],a.cell)-6;if(d<bws){bws=d;bw=w;}}
-    if(bw){a.wtarget=bw;bw.claim=a.id;setReason(a,null);if(goAdj(a,bw.cells[0])){a.state='toWall';a.doing='障害物へ向かう';if(a.talk<=0){say(a.root,'障害物を検知しました','robot');a.talk=5;}return;}bw.claim=0;a.wtarget=null;}
+    let bw=null,bws=1e9;for(const w of walls){if(w.cls!=='remove'||w.unreach>S.t||(w.claim&&w.claim!==a.id))continue;
+       // Allow player time to classify a new wall before robots automatically remove it.
+       if(S.t-w.builtAt<10)continue;
+       const d=md(w.cells[0],a.cell)-6;if(d<bws){bws=d;bw=w;}}
+    if(bw){a.wtarget=bw;bw.claim=a.id;setReason(a,null);if(goAdj(a,bw.cells[0])){a.state='toWall';a.doing='障害物へ向かう';if(a.talk<=0){say(a.root,'障害物を検知しました','robot');a.talk=5;}return;}bw.claim=0;bw.unreach=S.t+4;a.wtarget=null;}
     let best=null,bs=1e9;
     for(const c of holeList){if(c.claim&&c.claim!==a.id)continue;if(c.unreach>S.t)continue;
       let s=md(c,a.cell)-Math.min(3,deficit(c))*1.5;if(c.zone===2)s-=100;/* every low cell looks the same to a robot unless the player marks priority */if(s<bs){bs=s;best=c;}}
@@ -890,6 +908,9 @@ const STATUS_COL={'渋滞待ち':'#c98a12','仕事なし':'#5f6e80','置き場�
 function hud(){
   const cv=STAGE.victory.find(v=>v.key==='complaints'),sv=STAGE.victory.find(v=>v.key==='maxStall');
   $('mComplaintBox').hidden=!cv;$('mStallBox').hidden=!sv;
+   $('mWallsBox').hidden=!STAGE.owners;
+   if(STAGE.owners){const n={remove:0,hold:0,protect:0};walls.forEach(w=>n[w.cls]++);
+     $('mWalls').textContent=walls.length+'件（撤'+n.remove+' 保留'+n.hold+' 保護'+n.protect+'）';}
   if(cv){const m=$('mComplaint');m.textContent=S.complaints+' / '+cv.v;m.className=S.complaints>cv.v?'neg':S.complaints===cv.v?'warn':'';}
   if(sv){const m=$('mStall');m.textContent=Math.round(S.maxStall)+'秒';m.className=S.maxStall>sv.v?'neg':S.maxStall>sv.v*0.6?'warn':'';}
   $('clk').textContent=clockText(S.t)+' / '+clockText(STAGE.duration);$('clkProg').style.width=Math.min(100,S.t/STAGE.duration*100)+'%';
