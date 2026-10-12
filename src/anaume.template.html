@@ -180,6 +180,8 @@ table.eval{width:100%;border-collapse:collapse;font-size:13px}
     <div class="m"><span>採土可能量</span><b id="mQuarry">0</b></div>
     <div class="m"><span>置き場の土砂</span><b id="mPile">0</b></div>
     <div class="m"><span>迷走記録</span><b id="mWaste">0</b></div>
+    <div class="m" id="mComplaintBox" hidden><span>苦情</span><b id="mComplaint">0</b></div>
+    <div class="m" id="mStallBox" hidden><span>最長停止</span><b id="mStall">0秒</b></div>
   </div>
   <div class="speed panel">
     <button type="button" id="pauseBtn" aria-pressed="false">停止</button>
@@ -200,9 +202,12 @@ table.eval{width:100%;border-collapse:collapse;font-size:13px}
       <button type="button" data-tool="erase" aria-pressed="false">区域を消す</button>
       <button type="button" data-tool="pile" aria-pressed="false"><span class="sw" style="background:#6b4a2e"></span>置き場（15）</button>
       <button type="button" data-tool="quarry" aria-pressed="false">採土場の登録</button>
+      <button type="button" data-tool="obst" aria-pressed="false"><span class="sw" style="background:#9a5b2f"></span>障害物分類</button>
+      <button type="button" data-tool="road" aria-pressed="false"><span class="sw" style="background:#8c9096"></span>迂回路（8）</button>
       <button type="button" data-tool="newq" aria-pressed="false"><span class="sw" style="background:#a98a66"></span>採土場を指定（10）</button>
     </div>
     <div class="buy">
+      <button type="button" id="ruleBtn" hidden>新しい塀：撤去</button>
       <button type="button" id="buyFill">埋戻機を購入（40）</button>
       <button type="button" id="buyCarry">運搬機を購入（55）</button>
     </div>
@@ -307,9 +312,10 @@ function initCells(){
     if((j===8||j===9)&&i>=19&&i<=22)base=3+(i-18)*0.95; // the only ramp up to the quarry
     if(isRoad(i,j))type='road';
     let site=0;if(i>=QUARRY.i0&&i<=QUARRY.i1&&j>=QUARRY.j0&&j<=QUARRY.j1){type='quarry';site=1;}
-    cells.push({i,j,base,h:base,type,site,zone:0,bld:null,robotFill:0,claim:0,unreach:0,plot:null,dirty:true,decor:false});
+    const drive=(i>=PLATEAU.i0&&j<=PLATEAU.j1)||((j===8||j===9)&&i>=19&&i<=22); // plateau and ramp are drivable for trucks
+    cells.push({i,j,base,h:base,type,site,zone:0,bld:null,wall:null,drive,robotFill:0,claim:0,unreach:0,plot:null,dirty:true,decor:false});
   }
-  PREBUILT.forEach(([pi,pj])=>{for(let a=0;a<3;a++)for(let b=0;b<3;b++)cells[idx(pi+a,pj+b)].bld='house';});
+  (STAGE.prebuilt||PREBUILT).forEach(([pi,pj])=>{for(let a=0;a<3;a++)for(let b=0;b<3;b++)cells[idx(pi+a,pj+b)].bld='house';});
   cells[idx(DEPOT[0],DEPOT[1])].bld='depot';
 }
 const C=(i,j)=>(i<0||j<0||i>=N||j>=N)?null:cells[idx(i,j)];
@@ -318,7 +324,7 @@ const top=c=>(Math.min(c.h,c.base)+Math.max(0,c.h-c.base)*0.55)*HS;
 const deficit=c=>c.base-c.h, excess=c=>c.h-c.base;
 const nb4=c=>[C(c.i+1,c.j),C(c.i-1,c.j),C(c.i,c.j+1),C(c.i,c.j-1)].filter(Boolean);
 const SLOPE=1.6;
-function passable(a,b){return !b.bld&&Math.abs(b.h-a.h)<=SLOPE;}
+function passable(a,b,ag){if(b.bld||b.wall)return false;if(ag&&ag.roadOnly&&!(b.type==='road'||b.drive))return false;return Math.abs(b.h-a.h)<=SLOPE;}
 const md=(a,b)=>Math.abs(a.i-b.i)+Math.abs(a.j-b.j);
 
 /* ---------- quarry sites (registered one by one) ---------- */
@@ -427,7 +433,7 @@ function astar(start,isGoal,target,agent){
     const cur=open[bi];open[bi]=open[open.length-1];open.pop();inOpen[cur]=0;
     const cc=cells[cur];if(isGoal(cc)){const path=[];let k=cur;while(k!==s&&k>=0){path.push(k);k=came[k];}return path.reverse();}
     closed[cur]=1;
-    for(const nb of nb4(cc)){const k=idx(nb.i,nb.j);if(closed[k]||!passable(cc,nb))continue;
+    for(const nb of nb4(cc)){const k=idx(nb.i,nb.j);if(closed[k]||!passable(cc,nb,agent))continue;
       let cost=1+Math.abs(nb.h-cc.h)*0.35+(nb.type==='road'?-0.35:0);
       if(agent&&agent.robot&&occ[k]&&occ[k]!==agent.id)cost+=agent.avoid&&agent.avoid.has(k)?20:2.5;
       const g=gScore[cur]+cost;if(g<gScore[k]){gScore[k]=g;came[k]=cur;if(!inOpen[k]){open.push(k);inOpen[k]=1;}}}
@@ -459,7 +465,15 @@ const STAGES=[
    potholes:{every:[11,16],houseFactor:0.2,initial:[[11,20],[5,15],[12,27]]},events:[],
    victory:[{key:'houses',v:3,label:'住宅3棟の竣工'},{key:'roadEnd',v:0.8,label:'終了時の道路健全度80%以上'}],
    people:'建設業者3社（順に参入）。区画の基礎を掘って残土を脇に積み、22秒養生してから家を建てる',unlock:'埋戻禁止区域・工事区域'},
-  {id:'S1-03',no:'第3話',title:'ここは私の土地です',minutes:10,locked:true,lead:'境界争いから塀が建つ。撤去すれば建て直され、残せば配送が止まる。'},
+  {id:'S1-03',no:'第3話',title:'ここは私の土地です',minutes:10,duration:600,seed:303,money:140,
+   lead:'境界争いから、地主が道路に塀を建てます。撤去すれば建て直され、残せば運搬車が通れません。ロボットに、塀を何として扱わせるかを決める話です。',
+   robots:{filler:2,carrier:1},builders:[],bystanders:[],tools:['view','prio','erase','obst','road'],buy:['filler','carrier'],quarryReg:true,
+   trucksOnRoads:true,pile0Pos:[13,21],pile0:10,carrierAt:[[12,13]],prebuilt:[[2,26],[20,26],[7,10],[6,18]],
+   owners:[{name:'中村',skin:'man',home:[10,13],color:0x9a5b2f,tag:'#9a5b2f'},{name:'佐藤',skin:'woman',home:[9,19],color:0x4f6f93,tag:'#4f6f93'}],
+   disputes:[{t:25,owner:0,cells:[[11,12],[12,12]],line:'ここから先はうちの土地だ！'},{t:150,owner:1,cells:[[8,15],[8,16]],line:'境界はこの道の真ん中だ'},{t:300,owner:0,cells:[[11,19],[12,19]],line:'測量をやり直すまで通さん'}],
+   potholes:{every:[6,9],houseFactor:0,initial:[[11,20],[5,15],[12,27]]},events:[],
+   victory:[{key:'roadEnd',v:0.8,label:'終了時の道路通行率80%以上'},{key:'maxStall',v:30,op:'le',label:'ロボットの「経路なし」停止が30秒を超えない'},{key:'complaints',v:3,op:'le',label:'苦情3件以内'}],
+   people:'地主2人（中村さん・佐藤さん）。境界をめぐって道路に塀を建てる。撤去されると苦情を入れ、建て直す',unlock:'障害物分類・保留処理・迂回路'},
   {id:'S1-04',no:'第4話',title:'土はどこへ行った',minutes:12,locked:true,lead:'修復が進むほど採土場が広がり、運搬路が混み、土砂の供給が止まる。'},
   {id:'S1-05',no:'最終話',title:'担当者は休暇中',minutes:10,locked:true,lead:'ここまでの仕組みで公社を設計し、介入できない自律運転試験に臨む。'}];
 let STAGE=STAGES[0];
@@ -467,7 +481,7 @@ const SAVE_KEY='anaume-season1';
 function loadProgress(){try{return JSON.parse(localStorage.getItem(SAVE_KEY)||'{}')||{};}catch(e){return {};}}
 function saveProgress(p){try{localStorage.setItem(SAVE_KEY,JSON.stringify(p));}catch(e){}}
 function newStats(){return{t:0,money:STAGE.money,houses:0,filled:0,travel:0,moved:0,waste:0,workT:0,botT:0,roadSamples:0,roadSum:0,redigs:0,quarryFills:0,
-  jams:0,waitT:0,spawned:{},evDone:{},replans:0,aborts:0,abortCells:0,earned:0,spent:0,potT:9,traffic:1,road:1,stage:0,said:{},ended:false,soil0:0};}
+  jams:0,waitT:0,spawned:{},evDone:{},dispDone:{},wallsBuilt:0,wallsRemoved:0,selfRemoved:0,complaints:0,maxStall:0,roadBuilt:0,defaultCls:'remove',replans:0,aborts:0,abortCells:0,earned:0,spent:0,potT:9,traffic:1,road:1,stage:0,said:{},ended:false,soil0:0};}
 function once(key,msg){if(S.said[key])return;S.said[key]=true;tick(msg);}
 
 /* ---------- agents ---------- */
@@ -478,7 +492,7 @@ function addFiller(at){const b=makeFiller();const n=agents.filter(x=>x.kind==='f
   const a=Object.assign(b,{id:nextId++,robot:true,kind:'filler',name:'埋戻1号・'+n+'番機',state:'seek',path:[],load:0,cap:2,speed:2.7,target:null,source:null,timer:0,wait:0,talk:rnd(1,4),avoid:null,reason:null,doing:'待機',tripCells:0});
   scene.add(a.root);placeAt(a,at||freeNear(C(DEPOT[0]-1,DEPOT[1])));agents.push(a);anim(a,'Idle');return a;}
 function addCarrier(at){const b=makeCarrier();const n=agents.filter(x=>x.kind==='carrier').length+1;
-  const a=Object.assign(b,{id:nextId++,robot:true,kind:'carrier',name:'運搬3号・'+n+'番機',state:'seek',path:[],load:0,cap:6,speed:2.3,target:null,timer:0,wait:0,talk:2,avoid:null,reason:null,doing:'待機',tripCells:0});
+  const a=Object.assign(b,{roadOnly:!!STAGE.trucksOnRoads,id:nextId++,robot:true,kind:'carrier',name:'運搬3号・'+n+'番機',state:'seek',path:[],load:0,cap:6,speed:2.3,target:null,timer:0,wait:0,talk:2,avoid:null,reason:null,doing:'待機',tripCells:0});
   scene.add(a.root);placeAt(a,at||freeNear(C(DEPOT[0],DEPOT[1]-1)));agents.push(a);return a;}
 function addBuilder(skin,at,label){const {root,parts}=makePerson(skin);const tag=makeLabel(label,'#fff','#e08a2c',1.9);tag.position.y=1.95;root.add(tag);
   const a={id:nextId++,robot:false,kind:'builder',name:label,root,parts,state:'choose',path:[],speed:2.1,plot:null,timer:0,talk:2,phase:rnd(0,6),tractor:null,spoilK:0,redig:0,doing:'区画を探している'};
@@ -505,12 +519,61 @@ function stepBystander(a,dt){a.phase+=dt*8;let moving=false;
   if(a.parts.ll){a.parts.ll.rotation.x=moving?sw:0;a.parts.lr.rotation.x=moving?-sw:0;a.parts.al.rotation.x=a.state==='argue'?-1.6+sw:-sw;a.parts.ar.rotation.x=moving?sw:0;}
   if(!moving)a.root.position.y=top(a.cell);}
 
+/* ---------- walls: built by landowners, classified by the player ---------- */
+let walls=[],wallSeq=0;
+const CLS={remove:{t:'撤去予定',bg:'#c2412d'},hold:{t:'保留',bg:'#6d6656'},protect:{t:'保護',bg:'#3f6f98'}};
+const CLS_ORDER=['remove','hold','protect'];
+const wallMat={};
+function wallPiece(col){if(!wallMat[col])wallMat[col]=new THREE.MeshStandardMaterial({color:col,roughness:0.9});const g=new THREE.Group();const m=wallMat[col];
+  [[-0.6,-0.6],[0.6,-0.6],[-0.6,0.6],[0.6,0.6]].forEach(([x,z])=>{const p=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.5,0.16),m);p.position.set(x,0.75,z);p.castShadow=true;g.add(p);});
+  [0.45,1.1].forEach(y=>{[[0,-0.6,1.3,0.1],[0,0.6,1.3,0.1],[-0.6,0,0.1,1.3],[0.6,0,0.1,1.3]].forEach(([x,z,w,d])=>{const r=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),m);r.position.set(x,y,z);r.castShadow=true;g.add(r);});});
+  return g;}
+function buildWall(owner,coords){const w={id:++wallSeq,owner,coords,cells:[],cls:S.defaultCls,builtAt:S.t,claim:0,meshes:[],label:null};
+  for(const [i,j] of coords){const c=C(i,j);if(!c||c.wall||c.bld||occ[idx(i,j)])continue;c.wall=w;c.claim=0;w.cells.push(c);touch(c);
+    const m=wallPiece(owner.color);m.position.set(W(i),top(c),W(j));scene.add(m);w.meshes.push(m);}
+  if(!w.cells.length)return null;
+  w.label=makeLabel(CLS[w.cls].t,'#fff',CLS[w.cls].bg,3.4);const c0=w.cells[0];w.label.position.set(W(c0.i),top(c0)+2.4,W(c0.j));scene.add(w.label);
+  walls.push(w);S.wallsBuilt++;emit(W(c0.i),top(c0)+1,W(c0.j),0x8a6a40,14,1.2,3);
+  if(!S.said.wall){S.said.wall=true;showMemo('公社メモ：住民が道路に塀を建てた。ロボットの規則では、道をふさぐ物はすべて「障害物」です。塀ごとの扱いは「障害物分類」で、これから建つ塀の扱いは「新しい塀」ボタンで変えられます。','obst','障害物分類を選ぶ');}
+  return w;}
+function removeWall(w,by){w.cells.forEach(c=>{c.wall=null;touch(c);});w.meshes.forEach(m=>scene.remove(m));if(w.label)scene.remove(w.label);walls.splice(walls.indexOf(w),1);
+  const c0=w.cells[0];emit(W(c0.i),top(c0)+0.8,W(c0.j),0x8a6a40,20,1.6,3);
+  if(by==='robot'){S.wallsRemoved++;w.owner.onRemoved(w);}else S.selfRemoved++;}
+function setWallCls(w,cls){w.cls=cls;setLabel(w.label,CLS[cls].t,'#fff',CLS[cls].bg);if(cls!=='remove')w.claim=0;}
+function addOwner(o,k){const {root,parts}=makePerson(o.skin);const tag=makeLabel(o.name+'さん','#fff',o.tag,1.9);tag.position.y=1.95;root.add(tag);
+  const a={id:nextId++,robot:false,kind:'owner',name:o.name+'さん（地主）',root,parts,state:'idle',path:[],speed:1.9,timer:0,talk:0,phase:rnd(0,6),jobs:[],anger:0,lastRemoved:-999,color:o.color,home:C(o.home[0],o.home[1]),doing:'自宅にいる',job:null};
+  a.onRemoved=w=>{a.anger++;a.lastRemoved=S.t;S.complaints++;S.money-=8;S.spent+=8;say(a.root,a.anger>1?'また勝手に撤去したな！倍にしてやる':'勝手に塀を撤去するな！','alarm');
+    tick(`${o.name}さんから苦情（${S.complaints}件目）。苦情処理費8`);
+    const coords=w.coords.slice();
+    if(a.anger>=2){const vert=coords[0][1]===coords[1][1]; // pair across a vertical road shares j
+      const ext=coords.map(([i,j])=>vert?[i,j+3*(a.anger-1)]:[i-3*(a.anger-1),j]).filter(([i,j])=>{const c=C(i,j);return c&&c.type==='road';});coords.push(...ext);}
+    a.jobs.push({type:'build',coords,at:S.t+10,line:'元に戻させてもらう'});
+    if(S.complaints===2)showMemo('公社メモ：撤去するたびに苦情が入り、塀は建て直されます。「保留」にした塀は、地主の気が済めば自分で外します。運搬車は道路しか走れないので、塀を残すなら「迂回路」を敷く手もあります。','obst','障害物分類を選ぶ');};
+  scene.add(root);placeAt(a,a.home);agents.push(a);return a;}
+function stepOwner(a,dt){a.phase+=dt*8;let moving=false;
+  if(a.needReplan){a.needReplan=false;a.path=[];a.state='idle';a.timer=1;}
+  if(a.state==='idle'){a.timer-=dt;
+    // a 'hold' wall comes down by the owner's own hand once he has calmed down
+    for(const w of walls){if(w.owner===a&&w.cls==='hold'&&!w.unbuild&&S.t-w.builtAt>35&&S.t-a.lastRemoved>35){w.unbuild=true;a.jobs.push({type:'unbuild',wall:w,at:S.t,line:'まあ、今回は譲るか'});}}
+    if(a.timer<=0){const j=a.jobs.find(x=>x.at<=S.t);if(j){const t=j.type==='build'?C(...j.coords[0]):j.wall.cells[0];
+        const path=astar(a.cell,c=>md(c,t)===1&&!c.wall,t,a);if(path){a.jobs.splice(a.jobs.indexOf(j),1);a.job=j;a.path=path;a.state='walk';a.doing=j.type==='build'?'塀を建てに行く':'塀を外しに行く';}else a.timer=2;}
+      else if(a.cell!==a.home&&!a.path.length){const path=astar(a.cell,c=>c===a.home,a.home,a);if(path){a.path=path;a.state='walk';a.job=null;a.doing='家に帰る';}a.timer=3;}
+      else a.timer=1;}}
+  else if(a.state==='walk'){moving=!followPath(a,dt);if(!moving){if(a.job){a.state='work';a.timer=2;}else{a.state='idle';a.doing='自宅にいる';}}}
+  else if(a.state==='work'){a.timer-=dt;if(a.timer<=0){const j=a.job;a.job=null;
+      if(j.type==='build'){if(buildWall(a,j.coords)){say(a.root,j.line);tick(`${a.name.replace('（地主）','')}が塀を建てた`);}else{j.at=S.t+3;a.jobs.push(j);}}
+      else if(walls.includes(j.wall)){removeWall(j.wall,'owner');say(a.root,j.line);tick(`${a.name.replace('（地主）','')}が自分で塀を外した`);}
+      a.state='idle';a.timer=1;a.doing='自宅へ戻る';}}
+  const sw=moving?Math.sin(a.phase)*0.7:(a.state==='work'?Math.sin(a.phase*1.4)*0.8:0);
+  if(a.parts.ll){a.parts.ll.rotation.x=sw;a.parts.lr.rotation.x=-sw;a.parts.al.rotation.x=a.state==='work'?-1.2+sw*.4:-sw;a.parts.ar.rotation.x=a.state==='work'?-1.2-sw*.4:sw;}
+  if(!moving)a.root.position.y=top(a.cell);}
+
 /* ---------- movement ---------- */
 function setReason(a,r){a.reason=r;}
 function followPath(a,dt){
   if(!a.path.length)return true;
   const k=a.path[0];const nxt=cells[k];
-  if(!passable(a.cell,nxt)){a.path=[];a.needReplan=true;return false;}
+  if(!passable(a.cell,nxt,a)){a.path=[];a.needReplan=true;return false;}
   if(a.robot&&occ[k]&&occ[k]!==a.id){a.wait+=dt;S.waitT+=dt;setReason(a,'渋滞待ち');
     if(a.wait>1.4){a.wait=0;a.avoid=new Set([k]);a.needReplan=true;a.path=[];S.jams++;S.replans++;
       if(a.talk<=0){say(a.root,'経路を再計算します','robot');a.talk=4;}
@@ -553,8 +616,15 @@ function stepFiller(a,dt){
     if(a.state==='toSource'&&a.source){if(!goAdj(a,a.source)){a.source.unreach=S.t+6;setReason(a,'経路なし');a.state='seek';}}
     else if(a.state==='toHole'&&a.target){if(!goAdj(a,a.target)){a.target.unreach=S.t+6;a.target.claim=0;a.target=null;setReason(a,'経路なし');abortTrip(a);a.state='seek';}}
     else a.state='seek';}
+  if(a.state==='toWall'||a.state==='removing'){const w=a.wtarget;
+    if(!w||!walls.includes(w)||w.cls!=='remove'){if(w)w.claim=0;a.wtarget=null;a.state='seek';a.path=[];releaseRes(a);return;}
+    if(a.state==='toWall'){anim(a,'Running');if(followPath(a,dt)&&!a.needReplan){a.state='removing';a.timer=2.2;a.doing='障害物を撤去中';}return;}
+    anim(a,'Punch');S.workT+=dt;a.timer-=dt;if(a.timer<=0){removeWall(w,'robot');a.wtarget=null;a.state='seek';a.timer=0;if(a.talk<=0){say(a.root,'障害物を撤去しました','robot');a.talk=5;}}return;}
   if(a.state==='seek'){
     a.timer-=dt;if(a.timer>0)return;
+    // obstacles classified "remove" are jobs too
+    let bw=null,bws=1e9;for(const w of walls){if(w.cls!=='remove'||(w.claim&&w.claim!==a.id))continue;const d=md(w.cells[0],a.cell)-6;if(d<bws){bws=d;bw=w;}}
+    if(bw){a.wtarget=bw;bw.claim=a.id;setReason(a,null);if(goAdj(a,bw.cells[0])){a.state='toWall';a.doing='障害物へ向かう';if(a.talk<=0){say(a.root,'障害物を検知しました','robot');a.talk=5;}return;}bw.claim=0;a.wtarget=null;}
     let best=null,bs=1e9;
     for(const c of holeList){if(c.claim&&c.claim!==a.id)continue;if(c.unreach>S.t)continue;
       let s=md(c,a.cell)-Math.min(3,deficit(c))*1.5;if(c.zone===2)s-=100;/* every low cell looks the same to a robot unless the player marks priority */if(s<bs){bs=s;best=c;}}
@@ -675,8 +745,12 @@ function stepWorld(dt){
       const side=nb4(c).filter(n=>n.type==='grass'&&!n.bld&&!n.plot);if(!side.length)continue;const sd=side[Math.floor(R()*side.length)];
       const d=rnd(0.8,1.3);c.h-=d;sd.h+=d;touch(c);touch(sd);emit(W(c.i),top(c)+.3,W(c.j),0x6b6f75,14,1.4,4);break;}}
   const bots=agents.filter(a=>a.robot).length;const up=bots*0.02*dt;S.money-=up;S.spent+=up;
-  const roads=cells.filter(c=>c.type==='road');const ok=roads.filter(c=>deficit(c)<0.35).length/roads.length;S.road=ok;S.roadSum+=ok*dt;S.roadSamples+=dt;
+  const roads=cells.filter(c=>c.type==='road');const ok=roads.filter(c=>deficit(c)<0.35&&!c.wall).length/roads.length;S.road=ok;S.roadSum+=ok*dt;S.roadSamples+=dt;
   STAGE.builders.forEach((b,k)=>{if(!S.spawned[k]&&S.t>=b.t){S.spawned[k]=true;addBuilder(b.skin,C(b.at[0],b.at[1]),b.label);if(b.t>0)tick(`${b.label}が工事を始めた`);}});
+  (STAGE.disputes||[]).forEach((d,k)=>{if(!S.dispDone[k]&&S.t>=d.t){S.dispDone[k]=true;const o=agents.filter(x=>x.kind==='owner')[d.owner];if(o)o.jobs.push({type:'build',coords:d.cells,at:S.t,line:d.line});}});
+  for(const a of agents){if(!a.robot)continue;if(a.reason==='経路なし'){a.stall=(a.stall||0)+dt;if(a.stall>S.maxStall)S.maxStall=a.stall;
+      if(a.kind==='carrier'&&a.stall>8&&STAGE.tools.includes('road')&&!S.said.detour){S.said.detour=true;showMemo('公社メモ：運搬車が道路を通れず止まっている。運搬車は道路と山道しか走れません。塀をどうするか決めるか、「迂回路」で草地に道を敷いてください。','road','迂回路を選ぶ');}}
+    else a.stall=0;}
   STAGE.events.forEach((e,k)=>{if(!S.evDone[k]&&S.t>=e.t){S.evDone[k]=true;if(e.traffic)S.traffic=e.traffic;tick(e.msg);}});
   if(S.money<0)once('red','資金が赤字になった。マイナス40で契約解除');
 }
@@ -689,7 +763,7 @@ function agentAt(ev){setNdc(ev);const hits=ray.intersectObjects(agents.map(a=>a.
 let painting=false,downAt=null,paintVal=null;const activePtr=new Set();
 canvas.addEventListener('pointerdown',e=>{activePtr.add(e.pointerId);downAt=[e.clientX,e.clientY];
   if(e.button===0&&activePtr.size===1&&tool!=='view'&&S&&!S.ended){painting=true;paintVal=null;applyTool(cellAt(e),true);}else painting=false;});
-canvas.addEventListener('pointermove',e=>{if(activePtr.size>1)painting=false;if(painting&&(tool==='nofill'||tool==='prio'||tool==='erase'||tool==='newq'))applyTool(cellAt(e),false);});
+canvas.addEventListener('pointermove',e=>{if(activePtr.size>1)painting=false;if(painting&&(tool==='nofill'||tool==='prio'||tool==='erase'||tool==='newq'||tool==='road'))applyTool(cellAt(e),false);});
 addEventListener('pointerup',e=>{const wasTap=downAt&&Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])<7&&activePtr.size<=1;activePtr.delete(e.pointerId);painting=false;
   if(wasTap&&e.target===canvas&&tool==='view'&&S){select(agentAt(e));}downAt=null;});
 addEventListener('pointercancel',e=>{activePtr.delete(e.pointerId);painting=false;});
@@ -699,6 +773,8 @@ const TIPS={view:'ドラッグで回転、ピンチやホイールで拡大。�
   erase:'区域を消す：禁止・優先の指定を外します。',
   pile:'置き場（15）：草地に土砂置き場を作ります。運搬機はここへ運び、埋戻機はここからだけ補給します。',
   quarry:'採土場の登録：採土場のマスをタップすると、その採土場だけ用途を登録・解除します。登録するとロボットは掘り跡を穴として扱いません。',
+  obst:'障害物分類：塀をタップするたびに「撤去予定 → 保留 → 保護」と切り替わります。撤去は苦情を招き、保留は地主の気が済めば外され、保護は残り続けます。',
+  road:'迂回路（8）：草地をなぞって道路を敷きます。運搬車は道路と山道しか走れません。',
   newq:'採土場を指定（10）：草地を採土場にします。隣り合うマスは同じ採土場になります。新しい採土場は未登録で始まります。'};
 function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===t)));$('tip').textContent=TIPS[t];
   if(t==='view'){controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};}
@@ -711,6 +787,9 @@ function applyTool(c,first){if(!c||!S)return;
     for(const x of group){if(x.bld||x.zone===paintVal)continue;x.zone=paintVal;touch(x);if(x.zone===1)x.claim=0;}
     if(first&&c.plot&&group.length>1)tick(paintVal===1?'工事区画を埋戻禁止にした':paintVal===2?'工事区画を優先区域にした':'工事区画の指定を外した');}
   else if(tool==='erase'){if(c.zone){c.zone=0;touch(c);}}
+  else if(tool==='obst'&&first){if(!c.wall){$('tip').textContent='塀のあるマスをタップしてください。';return;}const w=c.wall;const nx=CLS_ORDER[(CLS_ORDER.indexOf(w.cls)+1)%3];setWallCls(w,nx);tick(`塀を「${CLS[nx].t}」にした`);}
+  else if(tool==='road'){if(c.type!=='grass'||c.bld||c.wall||c.decor||(c.plot&&STAGE.builders.length)){if(first)$('tip').textContent='迂回路は草地にだけ敷けます。';return;}
+    if(S.money<8){$('tip').textContent='資金が足りません。';return;}S.money-=8;S.spent+=8;c.type='road';touch(c);S.roadBuilt++;if(first)tick('迂回路を敷きはじめた');}
   else if(tool==='pile'&&first){if(c.type!=='grass'||c.bld||c.plot){$('tip').textContent='置き場は、工事区画以外の草地にしか作れません。';return;}
     if(S.money<15){$('tip').textContent='資金が足りません。';return;}S.money-=15;S.spent+=15;c.type='pile';c.base=c.h;touch(c);addPileLabel(c);tick('土砂置き場を新設した');}
   else if(tool==='quarry'&&first){if(c.type!=='quarry'){$('tip').textContent='採土場のマスをタップしてください。';return;}
@@ -762,10 +841,15 @@ addEventListener('pointerdown',()=>BGM.play(),{once:true});
 addEventListener('keydown',()=>BGM.play(),{once:true});
 $('bgmBtn').addEventListener('click',()=>{BGM.on=!BGM.on;try{localStorage.setItem('anaume-bgm',BGM.on?'on':'off');}catch(e){}syncBgmBtn();if(BGM.on)BGM.play();});
 
+/* ================= default rule for new walls ================= */
+function syncRuleBtn(){const b=$('ruleBtn');b.hidden=!STAGE.tools.includes('obst');if(S)b.textContent='新しい塀：'+CLS[S.defaultCls].t.replace('予定','');}
+$('ruleBtn').addEventListener('click',()=>{if(!S)return;S.defaultCls=CLS_ORDER[(CLS_ORDER.indexOf(S.defaultCls)+1)%3];syncRuleBtn();tick(`これから建つ塀の扱いを「${CLS[S.defaultCls].t}」にした`);});
+
 /* ================= memo ================= */
-function showMemo(text){$('memoText').textContent=text;$('memoTool').hidden=!STAGE.tools.includes('nofill');$('memo').hidden=false;}
+let memoToolName='nofill';
+function showMemo(text,toolName,label){memoToolName=toolName||'nofill';$('memoText').textContent=text;$('memoTool').textContent=label||'埋戻禁止を選ぶ';$('memoTool').hidden=!STAGE.tools.includes(memoToolName);$('memo').hidden=false;}
 $('memoClose').addEventListener('click',()=>{$('memo').hidden=true;});
-$('memoTool').addEventListener('click',()=>{setTool('nofill');$('memo').hidden=true;if(compactTools.matches)setToolsFolded(true);});
+$('memoTool').addEventListener('click',()=>{setTool(memoToolName);$('memo').hidden=true;if(compactTools.matches)setToolsFolded(true);});
 
 /* ================= inspection ================= */
 const pathGeo=new THREE.BufferGeometry();const pathArr=new Float32Array(3*220);pathGeo.setAttribute('position',new THREE.BufferAttribute(pathArr,3));
@@ -793,6 +877,10 @@ function drawSelection(){const a=sel;if(!a)return;const p=a.root.position;ring.p
 /* ================= HUD & report ================= */
 const STATUS_COL={'渋滞待ち':'#c98a12','仕事なし':'#5f6e80','置き場が満杯':'#c98a12'};
 function hud(){
+  const cv=STAGE.victory.find(v=>v.key==='complaints'),sv=STAGE.victory.find(v=>v.key==='maxStall');
+  $('mComplaintBox').hidden=!cv;$('mStallBox').hidden=!sv;
+  if(cv){const m=$('mComplaint');m.textContent=S.complaints+' / '+cv.v;m.className=S.complaints>cv.v?'neg':S.complaints===cv.v?'warn':'';}
+  if(sv){const m=$('mStall');m.textContent=Math.round(S.maxStall)+'秒';m.className=S.maxStall>sv.v?'neg':S.maxStall>sv.v*0.6?'warn':'';}
   $('clk').textContent=clockText(S.t)+' / '+clockText(STAGE.duration);$('clkProg').style.width=Math.min(100,S.t/STAGE.duration*100)+'%';
   const mm=$('mMoney');mm.textContent=Math.round(S.money);mm.className=S.money<0?'neg':'';
   const hv=STAGE.victory.find(v=>v.key==='houses');$('mHouseBox').hidden=!hv;if(hv){const mh=$('mHouse');mh.textContent=S.houses+' / '+hv.v;mh.className=S.houses>=hv.v?'ok':'';}
@@ -808,8 +896,8 @@ function hud(){
 function report(kind){
   S.ended=true;running=false;
   const roadAvg=S.roadSum/Math.max(1,S.roadSamples);
-  const val={roadEnd:S.road,roadAvg,houses:S.houses};
-  const res=STAGE.victory.map(v=>({...v,ok:kind!=='bankrupt'&&val[v.key]>=v.v,got:v.key==='houses'?S.houses+'棟':Math.round(val[v.key]*100)+'%'}));
+  const val={roadEnd:S.road,roadAvg,houses:S.houses,maxStall:S.maxStall,complaints:S.complaints};
+  const res=STAGE.victory.map(v=>({...v,ok:kind!=='bankrupt'&&(v.op==='le'?val[v.key]<=v.v:val[v.key]>=v.v),got:v.key==='houses'?S.houses+'棟':v.key==='maxStall'?Math.round(val[v.key])+'秒':v.key==='complaints'?val[v.key]+'件':Math.round(val[v.key]*100)+'%'}));
   const ok=res.every(r=>r.ok);S.cleared=ok;
   if(ok&&!S.extended){const pr=loadProgress();pr[STAGE.id]={cleared:true,best:Math.max((pr[STAGE.id]||{}).best||0,Math.round(roadAvg*100))};saveProgress(pr);}
   $('endKind').textContent=(kind==='bankrupt'?'契約解除通知書':'業務完了報告書')+'　'+STAGE.no+'「'+STAGE.title+'」';
@@ -824,6 +912,7 @@ function report(kind){
     ['財政',(S.earned-S.spent>=0?'+':'')+Math.round(S.earned-S.spent),`収入 ${Math.round(S.earned)}・支出 ${Math.round(S.spent)}`],
     ['迷走記録',S.waste.toFixed(1),`埋めたあと掘り返された土砂と、採土場へ戻された土砂。基礎の掘り直し${S.redigs}回、採土場への埋め戻し${S.quarryFills.toFixed(1)}`],
     ['迷走の内訳',`${Math.round(S.waitT)}秒`,`渋滞待ちの合計時間。経路の再計算${S.replans}回、着く前に仕事が消えた無駄足${S.aborts}回（${S.abortCells}マス）`],
+    ...(STAGE.owners?[['紛争記録',`苦情${S.complaints}件`,`塀の建設${S.wallsBuilt}回、ロボットによる撤去${S.wallsRemoved}回、地主による自主撤去${S.selfRemoved}回、迂回路${S.roadBuilt}マス、「経路なし」の最長停止${Math.round(S.maxStall)}秒`]]:[]),
     ['土量の収支',(Math.abs(err)<0.005?'0.00':err.toFixed(2)),`開始時の総土量 ${S.soil0.toFixed(1)} との差。掘っても埋めても、竣工しても土は増減しない`]];
   $('evalBody').innerHTML=rows.map((r,i)=>`<tr class="${i===5||i===6?'hi':''}"><th>${r[0]}</th><td class="v">${r[1]}</td><td class="d">${r[2]}</td></tr>`).join('');
   const ni=STAGES.indexOf(STAGE)+1;$('nextBtn').hidden=!(ok&&STAGES[ni]&&!STAGES[ni].locked);
@@ -836,7 +925,7 @@ $('menuBtn').addEventListener('click',()=>{$('endOv').hidden=true;showMenu();});
 
 /* ================= loop ================= */
 function simStep(dt){S.t+=dt;holeT-=dt;if(holeT<=0){refreshHoles();holeT=0.3;}
-  stepWorld(dt);for(const a of agents){if(a.kind==='filler')stepFiller(a,dt);else if(a.kind==='carrier')stepCarrier(a,dt);else if(a.kind==='builder')stepBuilder(a,dt);else stepBystander(a,dt);if(a.mixer)a.mixer.update(dt);}
+  stepWorld(dt);for(const a of agents){if(a.kind==='filler')stepFiller(a,dt);else if(a.kind==='carrier')stepCarrier(a,dt);else if(a.kind==='builder')stepBuilder(a,dt);else if(a.kind==='owner')stepOwner(a,dt);else stepBystander(a,dt);if(a.mixer)a.mixer.update(dt);}
   if(!S.ended&&S.money<-40){report('bankrupt');return false;}
   if(S.t>=STAGE.duration&&!S.extended&&!S.ended){report('term');return false;}return true;}
 const clock=new THREE.Clock();let spin=0;
@@ -859,7 +948,7 @@ function start(stage){
   bubbles.forEach(b=>b.el.remove());bubbles.length=0;tickerLines.length=0;select(null);$('memo').hidden=true;
   occ=new Int16Array(N*N);nextId=1;sites={1:{reg:!!STAGE.quarryReg,name:'第1採土場',label:null}};
   initCells();setupPlots();S=newStats();
-  PREBUILT.forEach(([pi,pj])=>{const h=makeHouse();h.position.set(W(pi+1),top(C(pi+1,pj+1)),W(pj+1));scene.add(h);decor.push(h);});
+  (STAGE.prebuilt||PREBUILT).forEach(([pi,pj])=>{const h=makeHouse();h.position.set(W(pi+1),top(C(pi+1,pj+1)),W(pj+1));scene.add(h);decor.push(h);});
   const dc=C(DEPOT[0],DEPOT[1]);const dep=clone('stallRed',true);dep.scale.setScalar(1.6);dep.position.set(W(dc.i),top(dc),W(dc.j));scene.add(dep);decor.push(dep);
   const dl=makeLabel('穴埋め公社','#1d1a14','#e8b23a',3.4);dl.position.set(W(dc.i),top(dc)+3,W(dc.j));scene.add(dl);decor.push(dl);
   const treeNames=['tree_pineDefaultA','tree_pineRoundC','tree_default_fall','tree_oak_fall','tree_pineTallA_detailed'];
@@ -868,14 +957,17 @@ function start(stage){
     if(!edge||c.type!=='grass'||c.bld||c.plot||c.decor)continue;c.decor=true;const t=clone(treeNames[k%treeNames.length],true);t.scale.setScalar(rnd(1.6,2.4));t.position.set(W(i),top(c),W(j));t.rotation.y=rnd(0,6);scene.add(t);decor.push(t);}
   for(let k=0;k<24;k++){const a=rnd(0,6.28),r=rnd(27,45);const t=clone(treeNames[k%treeNames.length],true);t.scale.setScalar(rnd(2.2,3.4));t.position.set(Math.cos(a)*r,0,Math.sin(a)*r);scene.add(t);decor.push(t);}
   // initial stockpile holds soil taken earlier from the quarry (moved, not created)
-  const pc=C(PILE0[0],PILE0[1]);pc.type='pile';pc.base=pc.h;
+  const pp=STAGE.pile0Pos||PILE0;const pc=C(pp[0],pp[1]);pc.type='pile';pc.base=pc.h;
   const P0=STAGE.pile0||7;let need=P0;for(const q of cells.filter(c=>c.type==='quarry')){if(need<=0)break;const t=Math.min(need,0.8);q.h-=t;need-=t;}pc.h+=P0;addPileLabel(pc);updateSiteLabel(1);
   // existing potholes, their soil pushed to the roadside
   STAGE.potholes.initial.forEach(([i,j])=>{const c=C(i,j);const sd=nb4(c).find(n=>n.type==='grass'&&!n.bld&&!n.plot);if(sd){c.h-=1.3;sd.h+=1.3;}});
   S.soil0=totalSoil();
   syncCells(true);
   const fpos=[[13,13],[15,13],[13,14],[15,14]],cpos=[[16,12],[16,13]];
-  for(let k=0;k<STAGE.robots.filler;k++)addFiller(C(...fpos[k]));for(let k=0;k<STAGE.robots.carrier;k++)addCarrier(C(...cpos[k]));
+  const cp=STAGE.carrierAt||cpos;
+  for(let k=0;k<STAGE.robots.filler;k++)addFiller(C(...fpos[k]));for(let k=0;k<STAGE.robots.carrier;k++)addCarrier(C(...cp[k]));
+  walls.forEach(w=>{w.meshes.forEach(m=>scene.remove(m));if(w.label)scene.remove(w.label);});walls=[];
+  (STAGE.owners||[]).forEach(addOwner);syncRuleBtn();
   STAGE.bystanders.forEach(addBystander);
   document.querySelectorAll('[data-tool]').forEach(b=>{b.hidden=!STAGE.tools.includes(b.dataset.tool);});
   $('buyFill').hidden=!STAGE.buy.includes('filler');$('buyCarry').hidden=!STAGE.buy.includes('carrier');
@@ -894,7 +986,7 @@ function showMenu(){running=false;const pr=loadProgress();const ol=$('epList');o
   $('loadNote').hidden=ready;$('startOv').hidden=false;}
 function openBrief(st){pending=st;$('endOv').hidden=true;$('startOv').hidden=true;
   $('briefKind').textContent=`業務委託契約書　シーズン1 ${st.no}`;$('briefTitle').textContent=st.title;$('briefLead').textContent=st.lead;
-  const tools={nofill:'埋戻禁止',prio:'優先区域',erase:'区域を消す',quarry:'採土場の登録',pile:'置き場',newq:'採土場を指定'};
+  const tools={obst:'障害物分類',road:'迂回路',nofill:'埋戻禁止',prio:'優先区域',erase:'区域を消す',quarry:'採土場の登録',pile:'置き場',newq:'採土場を指定'};
   const rows=[['契約期間',`${st.minutes}分（×3で早送りできます）`],['契約目標',st.victory.map(v=>v.label).join('、')],
     ['報酬',`道路の穴を埋めた土砂1につき2${st.builders.length?'、住宅1棟の竣工支援につき20':''}。ロボットの維持費と燃料費は公社負担。資金がマイナス40を下回ると契約解除。初期資金 ${st.money}`],
     ['支給品',`埋戻機${st.robots.filler}台（土砂置き場からしか補給できない）、運搬機${st.robots.carrier}台（採土場や残土の山から置き場へ運ぶ）、置き場1か所、採土場1か所${st.quarryReg?'（用途登録済み）':''}`],
