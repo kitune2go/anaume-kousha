@@ -35,6 +35,7 @@ GitHub Pages：https://kitune2go.github.io/anaume-kousha/
 src/anaume.template.html   ゲーム本体（HTML/CSS/JS、ステージ定義を含む）
 assets/models/             glTFモデル（CC0）
 assets/skins/              人物のスキン（CC0）
+assets/audio/bgm.mp3       BGM（初回タップで再生、メニューでは大きめ・プレイ中は控えめ）
 tools/build.py             assets を埋め込んで dist/anaume.html を生成
 tools/sim-test.js          各話を複数の遊び方で早送りし、結果と土量誤差を表で出す
 docs/                      企画書2.0、シーズン1計画、MVPレビュー、開発記録
@@ -54,6 +55,7 @@ npm test                        # build --test → sim-test.js
 
 ## クレジット
 
+- 音楽「人間で解こうとしてはいけない問題ばかりだ act2」— breezylied196（`assets/audio/bgm.mp3`）
 - Kenney「Nature Kit」「Fantasy Town Kit」「Car Kit」「Blocky Characters」— CC0（www.kenney.nl）
 - RobotExpressive — Tomás Laulhé（Quaternius）、改変 Don McCurdy — CC0
 - three.js r128 — MIT

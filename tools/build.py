@@ -19,11 +19,14 @@ for f in sorted(glob.glob(os.path.join(ROOT, 'assets', 'skins', 'skin_*.png'))):
     name = os.path.basename(f)[5:-4]
     skins[name] = 'data:image/png;base64,' + base64.b64encode(open(f, 'rb').read()).decode()
 
-page = src.replace('__ASSETS__', json.dumps(models)).replace('__SKINS__', json.dumps(skins))
+bgm_path = os.path.join(ROOT, 'assets', 'audio', 'bgm.mp3')
+audio = json.dumps(base64.b64encode(open(bgm_path, 'rb').read()).decode()) if os.path.exists(bgm_path) else '""'
+
+page = src.replace('__ASSETS__', json.dumps(models)).replace('__SKINS__', json.dumps(skins)).replace('__AUDIO__', audio)
 os.makedirs(os.path.join(ROOT, 'dist'), exist_ok=True)
 out = os.path.join(ROOT, 'dist', 'anaume.html')
 open(out, 'w', encoding='utf-8').write(page)
-print(f'{out}  {len(page)//1024} KB  models={len(models)} skins={len(skins)}')
+print(f'{out}  {len(page)//1024} KB  models={len(models)} skins={len(skins)} bgm={"yes" if audio!=chr(34)*2 else "no"}')
 
 if '--test' in sys.argv:
     # debug hooks: fast-forward the fixed-step simulation and poke at state from a headless browser
