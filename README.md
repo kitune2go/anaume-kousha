@@ -11,7 +11,9 @@
 
 ## 遊ぶ
 
-`dist/anaume.html` をブラウザで開く。モデルとテクスチャを埋め込んだ単一ファイルで、three.js だけCDNから読み込む。
+GitHub Pages：https://kitune2go.github.io/anaume-kousha/
+
+または `dist/anaume.html` をブラウザで開く。モデルとテクスチャを埋め込んだ単一ファイルで、three.js だけCDNから読み込む。
 
 ## シーズン1
 
