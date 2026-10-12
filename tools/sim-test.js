@@ -47,10 +47,54 @@ async function run(stage, scen) {
   await b.close();
   return { stage: stage + 1, scen, ...r, errors: errs.length };
 }
+// Regression: the player must be able to classify an actual wall, not only
+// change the default used by the synthetic strategy tests.
+async function testStage3WallTool() {
+  const b = await launch();
+  try {
+    const p = await b.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const errors = [];
+    p.on('pageerror', e => errors.push(e.message));
+    await p.goto('file://' + path.resolve(__dirname, '../dist/anaume.test.html'));
+    await p.waitForFunction(() => document.getElementById('loadNote').hidden, { timeout: 60000 });
+    await p.evaluate(() => __start(2));
+    await p.click('#pauseBtn');
+    const result = await p.evaluate(() => {
+      let first;
+      for (let n = 0; n < 200; n++) {
+        __ff(1);
+        const w = __walls();
+        if (w.length) { first = w[0]; break; }
+      }
+      if (!first) return { error: 'No wall appeared within 200 simulated seconds' };
+      if (first.cls !== 'remove') return { error: 'First wall does not start as remove' };
+      if (!__classifyWall(first.id)) return { error: 'Obstacle-classification tool rejected the wall' };
+      const held = __walls().find(w => w.id === first.id);
+      if (!held || held.cls !== 'hold' || held.claim !== 0) {
+        return { error: 'Classifying a wall did not switch to hold and clear reservations', held };
+      }
+      // A held wall must eventually be removable by its owner and not freeze the sim.
+      __ff(90);
+      const d = __dbg();
+      return { firstWall: first.id, firstState: held.cls, ownerRemoved: d.S.selfRemoved, t: d.S.t, errors: [] };
+    });
+    if (errors.length || result.error || result.ownerRemoved < 1) {
+      throw new Error('Stage 3 wall interaction failed: ' + JSON.stringify({ ...result, errors }));
+    }
+    console.log('Stage 3 wall classification: PASS', result);
+  } finally { await b.close(); }
+}
 (async () => {
   const rows = [];
   const only = process.env.STAGE ? +process.env.STAGE - 1 : null;
   for (const [st, list] of Object.entries(STRATEGIES)) if (only === null || +st === only) for (const sc of list) rows.push(await run(+st, sc));
   console.table(rows);
   if (rows.some(r => r.errors || Math.abs(r.soilError) > 0.001)) process.exitCode = 1;
+  if (only === null || only === 2) {
+    // The intended combination must remain winnable by actual simulation.
+    const target = rows.find(r => r.stage === 3 && r.scen === 'hold+road');
+    if (!target || !target.cleared) { console.error('Stage 3 hold+road no longer reaches its goal', target); process.exitCode = 1; }
+    try { await testStage3WallTool(); }
+    catch (e) { console.error(e); process.exitCode = 1; }
+  }
 })();
