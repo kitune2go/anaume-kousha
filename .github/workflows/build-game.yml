@@ -1,4 +1,4 @@
-name: Build bundled game
+name: Build and test bundled game
 
 on:
   push:
@@ -6,7 +6,8 @@ on:
     paths:
       - "src/**"
       - "assets/**"
-      - "tools/build.py"
+      - "tools/**"
+      - "package.json"
       - ".github/workflows/build-game.yml"
   workflow_dispatch:
 
@@ -20,10 +21,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build single-file game
-        run: python3 tools/build.py
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-      - name: Commit generated HTML if changed
+      - name: Install test dependencies
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Simulate episodes and check wall behavior
+        run: npm test
+
+      - name: Commit bundled HTML if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
