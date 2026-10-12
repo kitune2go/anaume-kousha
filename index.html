@@ -4,62 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>穴埋め公社</title>
+<meta http-equiv="refresh" content="0; url=dist/anaume.html">
 <style>
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#9fb9cf}
-#game{display:block;width:100%;height:100%;border:0}
-#fallback{position:absolute;inset:0;display:grid;place-items:center;font:16px sans-serif;background:#f3eee2;color:#24211b}
-[hidden]{display:none!important}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3eee2;color:#24211b;font:16px "Hiragino Sans","Yu Gothic",sans-serif}
+a{color:#c2412d}
 </style>
 </head>
 <body>
-<div id="fallback" hidden>読み込めない場合は <a href="dist/anaume.html">こちら</a> から開いてください。</div>
-<iframe id="game" src="dist/anaume.html" title="穴埋め公社" allowfullscreen></iframe>
-<script>
-/*
- * GitHub Pages compatibility layer:
- * The current dist/anaume.html is a checked-in bundled page over 1 MB.
- * Make the published game mobile-friendly immediately, while keeping
- * src/anaume.template.html as the canonical source for future builds.
- */
-const mobileCss = "/* Mobile-first accessibility adjustments. Keep the game canvas visible. */\n*{box-sizing:border-box}\n@media (max-width:600px){\n  html,body{width:100%;height:100%;overflow:hidden}\n  .top{left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 6px) 8px 0;display:flex;gap:6px;align-items:center;justify-content:space-between}\n  .clock{min-width:0;flex:1 1 auto;padding:7px 10px;gap:2px}\n  .clock b{font-size:17px}\n  .clock small{font-size:11px}\n  .clock .prog{height:5px}\n  .speed{padding:4px;gap:5px;flex:0 0 auto}\n  .speed button{min-width:44px;min-height:46px;font-size:15px;padding:8px}\n  .metrics{order:3;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));flex:0 0 100%;width:100%;overflow:visible;gap:0}\n  .m{min-width:0;padding:6px 7px;gap:3px;border-bottom:1px solid rgba(236,231,218,.12)}\n  .m span{font-size:11.5px;overflow:hidden;text-overflow:ellipsis;letter-spacing:0}\n  .m b{font-size:16px;line-height:1.1}\n  .dock{left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);max-height:48dvh;align-items:flex-end}\n  .toolbox{min-width:0;max-width:none;flex:1 1 100%;padding:7px 9px 9px;gap:8px}\n  .fold{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;border:1px solid rgba(236,231,218,.25);border-radius:5px;background:rgba(232,178,58,.13);font-size:15px;font-weight:700;color:var(--text);padding:9px 14px}\n  .tools,.buy{gap:8px;min-height:48px;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x}\n  .tools button,.buy button{min-height:48px;font-size:15px;line-height:1.3;padding:9px 13px;flex:0 0 auto}\n  .tools button .sw{width:12px;height:12px;margin-right:7px}\n  .tip{font-size:13px;line-height:1.5}\n  .ticker{display:none}\n  .inspect{left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 160px);bottom:auto;width:auto;max-height:30dvh;overflow:auto;font-size:14px;padding:11px 12px}\n  .ins-head b{font-size:16px}\n  .ins-head button{min-width:48px;min-height:44px;font-size:14px;padding:8px 12px}\n  .inspect dl{gap:6px 12px}\n  .bub{font-size:14px;padding:6px 9px}\n  .ov{padding:calc(env(safe-area-inset-top,0px) + 10px) 10px calc(env(safe-area-inset-bottom,0px) + 10px);align-items:safe center;overflow-y:auto;overscroll-behavior:contain}\n  .form{box-sizing:border-box;width:100%;max-width:44rem;padding:18px 16px;gap:12px}\n  .form h1{font-size:clamp(27px,8vw,36px)}\n  .form h2{font-size:clamp(21px,6vw,28px)}\n  .form p{font-size:16px;line-height:1.7}\n  .form .kind{font-size:12px}\n  .note{font-size:13.5px;line-height:1.6}\n  .terms{font-size:14px;grid-template-columns:minmax(76px,auto) 1fr}\n  .terms dt,.terms dd{padding:9px 10px;overflow-wrap:anywhere}\n  .terms dt{white-space:normal}\n  .btn{min-height:48px;font-size:16px;letter-spacing:.07em;padding:11px 16px}\n  .row .btn{flex:1 1 auto}\n  .ep{min-height:68px;padding:12px;gap:5px 10px}\n  .ep .no{font-size:13px}\n  .ep .tt{font-size:17px}\n  .ep .bl{font-size:14px}\n  .ep .st{font-size:12px}\n  .conds{font-size:15px}\n  table.eval{font-size:14px}\n  .eval th,.eval td{padding:9px 6px;overflow-wrap:anywhere}\n}\n@media (max-width:600px) and (max-height:650px){\n  .m{padding:4px 7px}\n  .m span{font-size:11px}\n  .m b{font-size:14px}\n  .inspect{top:calc(env(safe-area-inset-top,0px) + 138px);max-height:24dvh}\n  .dock{max-height:42dvh}\n}\n@media (max-width:360px){\n  .clock b{font-size:15px}\n  .speed button{min-width:42px;padding:6px}\n  .m span{font-size:10.5px}\n}";
-const frame = document.getElementById('game');
-frame.addEventListener('load', () => {
-  try {
-    const doc = frame.contentDocument;
-    if (!doc || !doc.head) return;
-    let viewport = doc.querySelector('meta[name="viewport"]');
-    if (!viewport) {
-      viewport = doc.createElement('meta');
-      viewport.name = 'viewport';
-      doc.head.appendChild(viewport);
-    }
-    viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
-    const style = doc.createElement('style');
-    style.id = 'mobile-ui-fix';
-    style.textContent = mobileCss;
-    doc.head.appendChild(style);
-    const box = doc.getElementById('toolbox');
-    const button = doc.getElementById('foldBtn');
-    if (box && button) {
-      const small = frame.contentWindow.matchMedia('(max-width:600px)');
-      const adjust = () => {
-        if (!small.matches) {
-          box.classList.remove('folded');
-          button.textContent = '操作を閉じる';
-          button.setAttribute('aria-expanded','true');
-        } else {
-          box.classList.add('folded');
-          button.textContent = '操作を開く';
-          button.setAttribute('aria-expanded','false');
-        }
-      };
-      adjust();
-      small.addEventListener('change', adjust);
-    }
-  } catch (error) {
-    document.getElementById('fallback').hidden = false;
-  }
-});
-</script>
+<p>穴埋め公社を開いています。開かない場合は <a href="dist/anaume.html">こちら</a>。</p>
 </body>
 </html>
