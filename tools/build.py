@@ -33,7 +33,7 @@ if '--test' in sys.argv:
     hook = ("window.__dbg=()=>({S,agents,cells,plots,err:totalSoil()-S.soil0});"
             "window.__reg=()=>{sites[1].reg=true;};"
             "window.__ff=(sec)=>{for(let k=0;k<sec/0.05;k++){if(!simStep(0.05))break;}};"
-            "window.__start=(i)=>start(STAGES[i]);")
+            "window.__start=(i)=>start(STAGES[i]);window.__cam=(cp,tg)=>{camera.position.set(...cp);controls.target.set(...tg);controls.update();};")
     test = page.replace('let S=null,agents=[]', hook + 'let S=null,agents=[]', 1)
     # load three.js from node_modules (npm install) so the test runs offline
     test = test.replace('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', '../node_modules/three/build/three.min.js')

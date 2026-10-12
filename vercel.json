@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "echo 'no install needed: dist/anaume.html is prebuilt'",
-  "buildCommand": "mkdir -p public && cp dist/anaume.html public/index.html",
+  "buildCommand": "mkdir -p public && cp dist/anaume.html public/index.html && cp assets/og.png public/og.png",
   "outputDirectory": "public"
 }
