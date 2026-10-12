@@ -1,0 +1,13 @@
+{
+  "name": "anaume-kousha",
+  "private": true,
+  "description": "穴埋め公社 — 人間が穴を掘り、ロボットが埋める3D箱庭シミュレーション",
+  "scripts": {
+    "build": "python3 tools/build.py",
+    "test": "python3 tools/build.py --test && node tools/sim-test.js"
+  },
+  "devDependencies": {
+    "playwright": "1.47.2",
+    "three": "0.128.0"
+  }
+}

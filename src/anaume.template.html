@@ -1,0 +1,798 @@
+<title>穴埋め公社</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: full-screen grid diorama; HUD = dark instrument strip; contract & report = official forms on paper */
+:root{
+  --ink:#141820;--paper:#f3eee2;--text:#ece7da;--seal:#c2412d;--robot:#e8b23a;--soil:#9a6b43;--prio:#e8b23a;--dim:#9aa0ad;
+  --display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:#9fb9cf;color:var(--text);font-family:var(--body)}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.panel{background:rgba(20,24,32,.84);border:1px solid rgba(236,231,218,.12);border-radius:6px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.top{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;pointer-events:none}
+.clock{padding:7px 12px;display:grid;gap:4px;min-width:8.5em}
+.clock b{font-family:var(--mono);font-size:19px;font-variant-numeric:tabular-nums}
+.clock .prog{height:3px;background:rgba(236,231,218,.15);border-radius:2px;overflow:hidden}
+.clock .prog i{display:block;height:100%;width:0;background:var(--robot)}
+.clock small{font-size:10.5px;color:var(--dim)}
+.metrics{display:flex;flex-wrap:wrap;padding:4px 2px;min-width:0;flex:1 1 320px}
+.m{padding:4px 11px;display:grid;gap:1px;border-left:1px solid rgba(236,231,218,.1);min-width:5.6em}
+.m:first-child{border-left:0}
+.m span{font-size:10.5px;color:var(--dim);letter-spacing:.06em;white-space:nowrap}
+.m b{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.m b.neg{color:#f08a74}.m b.ok{color:#9fd3a0}.m b.warn{color:var(--robot)}
+.speed{display:flex;gap:4px;padding:6px;pointer-events:auto;align-items:center}
+button{font:inherit}
+.speed button,.tools button,.buy button{color:var(--text);background:transparent;border:1px solid rgba(236,231,218,.2);border-radius:4px;padding:6px 9px;cursor:pointer;font-size:12px;white-space:nowrap}
+.speed button[aria-pressed="true"],.tools button[aria-pressed="true"]{background:var(--robot);color:#1b1608;border-color:var(--robot)}
+button:focus-visible{outline:2px solid var(--robot);outline-offset:2px}
+.dock{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;pointer-events:none}
+.toolbox{pointer-events:auto;padding:8px;display:grid;gap:6px;min-width:0;flex:1 1 360px;max-width:640px}
+.tools,.buy{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}
+.tools::-webkit-scrollbar,.buy::-webkit-scrollbar{display:none}
+.tools button .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:0}
+.buy button{border-style:dashed}
+.buy button[disabled]{opacity:.4;cursor:not-allowed}
+.fold{display:none;justify-self:end;color:var(--dim);background:transparent;border:0;font-size:11.5px;padding:0 2px;cursor:pointer}
+.toolbox.folded .tools,.toolbox.folded .buy,.toolbox.folded .tip{display:none}
+.inspect{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 92px);width:min(300px,calc(100vw - 24px));padding:10px 12px;display:grid;gap:6px;font-size:12.5px}
+.ins-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ins-head b{font-size:14px}
+.ins-head button{color:var(--dim);background:transparent;border:1px solid rgba(236,231,218,.2);border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px}
+.inspect dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0}
+.inspect dt{color:var(--dim)}
+.inspect dd{margin:0;font-variant-numeric:tabular-nums;min-width:0}
+.inspect dd.bad{color:#f08a74;font-weight:700}
+.tip{font-size:11.5px;color:var(--dim);line-height:1.5;min-height:1.5em}
+.ticker{pointer-events:none;padding:8px 12px;display:grid;gap:3px;font-size:12px;line-height:1.5;flex:1 1 280px;max-width:460px;min-width:0}
+.ticker div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.55}
+.ticker div:last-child{opacity:1}
+.ticker div::before{content:attr(data-t);color:var(--dim);margin-right:.6em;font-family:var(--mono);font-size:11px}
+#bubbles{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.bub{position:absolute;transform:translate(-50%,-100%);background:var(--paper);color:#1d1a14;font-size:12px;font-weight:700;padding:4px 9px;border-radius:9px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.bub::after{content:"";position:absolute;left:50%;bottom:-5px;margin-left:-5px;border:5px solid transparent;border-bottom:0;border-top-color:var(--paper)}
+.bub.robot{background:#1d1a14;color:var(--robot);font-family:var(--mono);font-weight:500}
+.bub.robot::after{border-top-color:#1d1a14}
+.bub.alarm{background:var(--seal);color:#fff}.bub.alarm::after{border-top-color:var(--seal)}
+/* forms */
+.ov{position:fixed;inset:0;display:grid;place-items:center;background:rgba(14,17,24,.62);padding-inline:16px;padding-block:20px;overflow:auto}
+.form{background:var(--paper);color:#24211b;max-width:44rem;width:100%;border-radius:3px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding-inline:clamp(16px,4vw,32px);padding-block:22px 24px;display:grid;gap:14px}
+.form .kind{font-size:11px;letter-spacing:.12em;color:#6d6656}
+.form h1,.form h2{font-family:var(--display);font-weight:800;margin:0;line-height:1.3;text-wrap:balance;letter-spacing:.04em}
+.form h1{font-size:clamp(28px,6.4vw,42px)}
+.form h1 small{display:block;font-size:.42em;letter-spacing:.2em;color:#6d6656;margin-top:6px}
+.form h2{font-size:clamp(19px,4.4vw,25px)}
+.form p{margin:0;font-size:14px;line-height:1.85;max-width:62ch}
+.terms{display:grid;grid-template-columns:auto 1fr;gap:0;border:1px solid #cfc6b2;font-size:13px;line-height:1.6;margin:0}
+.terms dt,.terms dd{margin:0;padding:7px 12px;border-top:1px solid #cfc6b2}
+.terms dt{font-weight:700;background:#ece5d4;white-space:nowrap}
+.terms dt:first-of-type,.terms dt:first-of-type+dd{border-top:0}
+.btn{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.16em;color:var(--paper);background:#24211b;border:0;border-radius:2px;padding:11px 24px;cursor:pointer}
+.btn.sub{background:transparent;color:#24211b;border:1px solid #24211b}
+.btn[disabled]{opacity:.45;cursor:wait}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.note{font-size:12px;color:#6d6656;line-height:1.7}
+table.eval{width:100%;border-collapse:collapse;font-size:13px}
+.eval th,.eval td{border-top:1px solid #cfc6b2;padding:7px 8px;text-align:left;vertical-align:top}
+.eval th{font-weight:700;white-space:nowrap}
+.eval td.v{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;text-align:right}
+.eval td.d{color:#4c4637}
+.eval tr.hi th,.eval tr.hi td{background:#f6e0da}
+.eps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ep{width:100%;text-align:left;display:grid;grid-template-columns:auto 1fr auto;gap:4px 14px;align-items:center;background:#fbf8f0;border:1px solid #cfc6b2;border-radius:3px;padding:11px 14px;cursor:pointer;color:inherit}
+.ep:hover:not([disabled]){border-color:#8f8670}
+.ep[disabled]{cursor:not-allowed;opacity:.55}
+.ep .no{font-family:var(--display);font-weight:800;font-size:13px;color:#6d6656;white-space:nowrap}
+.ep .tt{font-family:var(--display);font-weight:800;font-size:17px}
+.ep .bl{grid-column:2/4;font-size:12.5px;line-height:1.6;color:#4c4637}
+.ep .st{font-size:11px;white-space:nowrap;color:#6d6656}
+.ep .st.clear{color:var(--seal);font-weight:700;border:1.5px solid var(--seal);border-radius:50%;width:38px;height:38px;display:grid;place-items:center;transform:rotate(-10deg)}
+.conds{margin:0;padding-left:1.2em;font-size:13.5px;line-height:1.8}
+.conds li.ok{color:#2f6b38}.conds li.ng{color:#9a2e1c}
+.verdict{font-family:var(--display);font-size:clamp(20px,4.4vw,26px);font-weight:800;color:var(--seal)}
+@media (max-width:560px){.metrics{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;flex-basis:100%;order:3}.metrics::-webkit-scrollbar{display:none}.m{min-width:4.8em;padding:3px 8px}.m b{font-size:14px}.ticker{display:none}.toolbox{flex-basis:100%}.fold{display:block}.inspect{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 150px)}}
+</style>
+
+<canvas id="c" aria-label="穴埋め公社の街。ドラッグで回転、ピンチで拡大。道具を選ぶとマスに指示を塗れる"></canvas>
+<div id="bubbles"></div>
+
+<div class="top">
+  <div class="clock panel"><b id="clk">0:00 / 10:00</b><div class="prog"><i id="clkProg"></i></div><small id="fleet">埋戻機 2・運搬機 1</small></div>
+  <div class="metrics panel" aria-live="polite">
+    <div class="m"><span>資金</span><b id="mMoney">100</b></div>
+    <div class="m" id="mHouseBox"><span>住宅竣工</span><b id="mHouse">0 / 3</b></div>
+    <div class="m"><span>道路健全度</span><b id="mRoad">100%</b></div>
+    <div class="m"><span>採土可能量</span><b id="mQuarry">0</b></div>
+    <div class="m"><span>置き場の土砂</span><b id="mPile">0</b></div>
+    <div class="m"><span>迷走記録</span><b id="mWaste">0</b></div>
+  </div>
+  <div class="speed panel">
+    <button type="button" id="pauseBtn" aria-pressed="false">停止</button>
+    <button type="button" data-speed="1" aria-pressed="true">×1</button>
+    <button type="button" data-speed="3" aria-pressed="false">×3</button>
+  </div>
+</div>
+
+<div class="dock">
+  <div class="ticker panel" id="ticker"></div>
+  <div class="toolbox panel" id="toolbox">
+    <button type="button" class="fold" id="foldBtn" aria-expanded="true" aria-controls="toolbox">指示を畳む</button>
+    <div class="tools" role="toolbar" aria-label="作業指示">
+      <button type="button" data-tool="view" aria-pressed="true">見る</button>
+      <button type="button" data-tool="nofill" aria-pressed="false"><span class="sw" style="background:#c2412d"></span>埋戻禁止</button>
+      <button type="button" data-tool="prio" aria-pressed="false"><span class="sw" style="background:#e8b23a"></span>優先区域</button>
+      <button type="button" data-tool="erase" aria-pressed="false">区域を消す</button>
+      <button type="button" data-tool="pile" aria-pressed="false"><span class="sw" style="background:#6b4a2e"></span>置き場（15）</button>
+      <button type="button" data-tool="quarry" aria-pressed="false">採土場の登録</button>
+      <button type="button" data-tool="newq" aria-pressed="false"><span class="sw" style="background:#a98a66"></span>採土場を指定（10）</button>
+    </div>
+    <div class="buy">
+      <button type="button" id="buyFill">埋戻機を購入（40）</button>
+      <button type="button" id="buyCarry">運搬機を購入（55）</button>
+    </div>
+    <div class="tip" id="tip">ドラッグで回転、ピンチやホイールで拡大。道具を選ぶと、マスをタップまたはなぞって指示できます。</div>
+  </div>
+</div>
+
+<div class="inspect panel" id="inspect" hidden aria-live="polite">
+  <div class="ins-head"><b id="insName"></b><button type="button" id="closeInspect" aria-label="閉じる">閉じる</button></div>
+  <dl id="insBody"></dl>
+</div>
+
+<div class="ov" id="startOv">
+  <div class="form">
+    <div class="kind">シーズン1</div>
+    <h1>穴埋め公社<small>掘るなとは言っていない。</small></h1>
+    <p>人間は自分の事情で動きます。ロボットは与えられた規則で動きます。あなたは公社の運用責任者として、その組み合わせから生じる問題に対処します。</p>
+    <ol class="eps" id="epList"></ol>
+    <p class="note" id="loadNote">街を建設中…</p>
+    <p class="note">3Dモデル：Kenney「Fantasy Town Kit」「Car Kit」「Nature Kit」「Blocky Characters」（CC0）、RobotExpressive：Tomás Laulhé（Quaternius）・改変 Don McCurdy（CC0）</p>
+  </div>
+</div>
+
+<div class="ov" id="briefOv" hidden>
+  <div class="form" role="dialog" aria-labelledby="briefTitle">
+    <div class="kind" id="briefKind"></div>
+    <h2 id="briefTitle"></h2>
+    <p id="briefLead"></p>
+    <dl class="terms" id="briefTerms"></dl>
+    <p class="note">土は湧いてきません。掘れば山ができ、埋めればどこかが減ります。</p>
+    <div class="row"><button class="btn" id="startBtn" type="button">契約を結ぶ</button><button class="btn sub" id="backBtn" type="button">話を選び直す</button></div>
+  </div>
+</div>
+
+<div class="ov" id="endOv" hidden>
+  <div class="form">
+    <div class="kind" id="endKind">業務完了報告書</div>
+    <h2 id="endTitle"></h2>
+    <p id="endText"></p>
+    <table class="eval"><tbody id="evalBody"></tbody></table>
+    <div class="row"><button class="btn" id="nextBtn" type="button">次の話へ</button><button class="btn sub" id="contBtn" type="button">続けて運営する</button><button class="btn sub" id="againBtn" type="button">もう一度</button><button class="btn sub" id="menuBtn" type="button">話を選ぶ</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const ASSET_DATA = __ASSETS__;
+const SKIN_DATA = __SKINS__;
+(function(){
+const $=id=>document.getElementById(id);
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+let R=Math.random;                       // simulation randomness: seeded per stage so a run can be replayed
+const rnd=(a,b)=>a+R()*(b-a);
+const vr=(a,b)=>a+Math.random()*(b-a);  // purely visual randomness
+
+/* ================= renderer ================= */
+const canvas=$('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));
+renderer.outputEncoding=THREE.sRGBEncoding;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.85;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0xc9d5df,0.009);
+const camera=new THREE.PerspectiveCamera(40,1,0.5,500);camera.position.set(30,40,44);
+const controls=new THREE.OrbitControls(camera,canvas);controls.target.set(0,0,2);controls.enableDamping=true;controls.dampingFactor=0.08;
+controls.minDistance=12;controls.maxDistance=95;controls.minPolarAngle=0.2;controls.maxPolarAngle=1.25;controls.screenSpacePanning=false;
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w<h?58:40;camera.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(260,32,16),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,fog:false,
+  uniforms:{top:{value:new THREE.Color(0x4f7fb0)},hor:{value:new THREE.Color(0xe9d9c0)}},
+  vertexShader:'varying vec3 vP;void main(){vP=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader:'uniform vec3 top,hor;varying vec3 vP;void main(){gl_FragColor=vec4(mix(hor,top,smoothstep(-.02,.55,vP.y)),1.);}'})));
+scene.add(new THREE.HemisphereLight(0xbcd0ec,0x5a4a32,0.5));
+const sun=new THREE.DirectionalLight(0xffdcb0,1.2);sun.position.set(-30,50,22);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-32,right:32,top:32,bottom:-32,near:5,far:130});sun.shadow.bias=-0.0005;scene.add(sun);
+const skirt=new THREE.Mesh(new THREE.PlaneGeometry(400,400),new THREE.MeshStandardMaterial({color:0x5b7a45,roughness:1}));skirt.rotation.x=-Math.PI/2;skirt.position.y=-0.02;skirt.receiveShadow=true;scene.add(skirt);
+
+/* ================= grid world ================= */
+const N=32,CS=1.5,HS=0.36;
+const W=i=>(i-(N-1)/2)*CS;
+const idx=(i,j)=>j*N+i;
+let cells=[];
+const PLATEAU={i0:23,i1:31,j0:0,j1:10},QUARRY={i0:26,i1:29,j0:2,j1:5};
+const PLOTS=[[15,19],[3,3],[7,3],[3,19],[16,25],[24,12],[26,24],[7,24]];
+const PREBUILT=[[2,26],[20,26]];
+const DEPOT=[14,12];
+const PILE0=[17,11];
+function isRoad(i,j){return ((j===15||j===16)&&i<=22)||((i===11||i===12)&&j>=8)||((j===8||j===9)&&i>=11&&i<=18);}
+function initCells(){
+  cells=[];
+  for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+    let base=3+Math.sin(i*0.45)*Math.cos(j*0.38)*0.25+Math.sin((i+j)*0.2)*0.15;let type='grass';
+    if(i>=PLATEAU.i0&&j<=PLATEAU.j1)base=7.5+Math.sin(i*0.8)*0.1;
+    if((j===8||j===9)&&i>=19&&i<=22)base=3+(i-18)*0.95; // the only ramp up to the quarry
+    if(isRoad(i,j))type='road';
+    let site=0;if(i>=QUARRY.i0&&i<=QUARRY.i1&&j>=QUARRY.j0&&j<=QUARRY.j1){type='quarry';site=1;}
+    cells.push({i,j,base,h:base,type,site,zone:0,bld:null,robotFill:0,claim:0,unreach:0,plot:null,dirty:true,decor:false});
+  }
+  PREBUILT.forEach(([pi,pj])=>{for(let a=0;a<3;a++)for(let b=0;b<3;b++)cells[idx(pi+a,pj+b)].bld='house';});
+  cells[idx(DEPOT[0],DEPOT[1])].bld='depot';
+}
+const C=(i,j)=>(i<0||j<0||i>=N||j>=N)?null:cells[idx(i,j)];
+// piles and spoil heaps are drawn a little lower than their volume so they stay readable
+const top=c=>(Math.min(c.h,c.base)+Math.max(0,c.h-c.base)*0.55)*HS;
+const deficit=c=>c.base-c.h, excess=c=>c.h-c.base;
+const nb4=c=>[C(c.i+1,c.j),C(c.i-1,c.j),C(c.i,c.j+1),C(c.i,c.j-1)].filter(Boolean);
+const SLOPE=1.6;
+function passable(a,b){return !b.bld&&Math.abs(b.h-a.h)<=SLOPE;}
+const md=(a,b)=>Math.abs(a.i-b.i)+Math.abs(a.j-b.j);
+
+/* ---------- quarry sites (registered one by one) ---------- */
+let sites={};
+function siteOf(c){return c.type==='quarry'?sites[c.site]:null;}
+function siteReg(c){const s=siteOf(c);return !!(s&&s.reg);}
+
+/* ---------- terrain mesh ---------- */
+const colGeo=new THREE.BoxGeometry(1,1,1);colGeo.translate(0,0.5,0);
+const columns=new THREE.InstancedMesh(colGeo,new THREE.MeshStandardMaterial({roughness:0.95}),N*N);columns.castShadow=true;columns.receiveShadow=true;scene.add(columns);
+const tm=new THREE.Matrix4(),tc=new THREE.Color(),tc2=new THREE.Color();
+const COL={grass:0x6f9a4f,road:0x8c9096,quarry:0xa98a66,pile:0x6b4a2e,hole:0x3b2a1c,mound:0xa57a4f,nofill:0xc2412d,prio:0xe8b23a,reg:0x8f9fb0};
+function cellColor(c){
+  tc.setHex(c.type==='road'?COL.road:c.type==='quarry'?COL.quarry:c.type==='pile'?COL.pile:COL.grass);
+  if(c.type==='grass'){tc.offsetHSL(0,0,Math.sin(c.i*1.7)*Math.cos(c.j*1.3)*0.04);}
+  const d=deficit(c),e=excess(c);
+  if(d>0.05&&c.type!=='pile')tc.lerp(tc2.setHex(COL.hole),Math.min(0.85,d/2.2));
+  if(e>0.3&&c.type!=='pile')tc.lerp(tc2.setHex(COL.mound),Math.min(0.9,e/2));
+  if(c.type==='quarry'&&siteReg(c))tc.lerp(tc2.setHex(COL.reg),0.25);
+  if(c.zone===1)tc.lerp(tc2.setHex(COL.nofill),0.5);if(c.zone===2)tc.lerp(tc2.setHex(COL.prio),0.5);
+  if(sel&&sel.target===c)tc.lerp(tc2.setHex(0xffffff),0.35);
+  return tc;}
+function syncCells(all){for(const c of cells){if(!all&&!c.dirty)continue;c.dirty=false;
+  tm.makeScale(CS*0.985,Math.max(0.06,top(c)),CS*0.985);tm.setPosition(W(c.i),0,W(c.j));
+  const k=idx(c.i,c.j);columns.setMatrixAt(k,tm);columns.setColorAt(k,cellColor(c));}
+  columns.instanceMatrix.needsUpdate=true;if(columns.instanceColor)columns.instanceColor.needsUpdate=true;}
+const touch=c=>{if(c)c.dirty=true;};
+
+/* ================= particles, labels, bubbles ================= */
+const dotTex=(()=>{const cv=document.createElement('canvas');cv.width=cv.height=64;const g=cv.getContext('2d');const gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.4,'rgba(255,255,255,.5)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(cv);})();
+const PN=600,pPos=new Float32Array(PN*3),pCol=new Float32Array(PN*3),pVel=new Float32Array(PN*3),pLife=new Float32Array(PN);
+const pGeo=new THREE.BufferGeometry();pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));pGeo.setAttribute('color',new THREE.BufferAttribute(pCol,3));
+const pts=new THREE.Points(pGeo,new THREE.PointsMaterial({size:0.4,map:dotTex,vertexColors:true,transparent:true,depthWrite:false}));pts.frustumCulled=false;scene.add(pts);
+for(let i=0;i<PN;i++)pPos[i*3+1]=-999;let pHead=0;
+function emit(x,y,z,color,n,spread,up){const col=new THREE.Color(color);for(let k=0;k<n;k++){const i=pHead;pHead=(pHead+1)%PN;
+  pPos[i*3]=x;pPos[i*3+1]=y;pPos[i*3+2]=z;pVel[i*3]=vr(-spread,spread);pVel[i*3+1]=up*vr(.5,1.3);pVel[i*3+2]=vr(-spread,spread);pLife[i]=vr(.5,1.1);
+  pCol[i*3]=col.r;pCol[i*3+1]=col.g;pCol[i*3+2]=col.b;}}
+function stepParticles(dt){for(let i=0;i<PN;i++){if(pLife[i]<=0)continue;pLife[i]-=dt;pVel[i*3+1]-=7*dt;
+  pPos[i*3]+=pVel[i*3]*dt;pPos[i*3+1]+=pVel[i*3+1]*dt;pPos[i*3+2]+=pVel[i*3+2]*dt;if(pLife[i]<=0)pPos[i*3+1]=-999;}
+  pGeo.attributes.position.needsUpdate=true;pGeo.attributes.color.needsUpdate=true;}
+const texCache={};
+function labelTex(word,fg,bg){const key=word+fg+bg;if(texCache[key])return texCache[key];
+  const cv=document.createElement('canvas');cv.width=320;cv.height=84;const g=cv.getContext('2d');
+  g.font='700 38px "Zen Kaku Gothic New","Hiragino Sans",sans-serif';const w=Math.min(310,g.measureText(word).width+34);
+  g.fillStyle=bg;const x0=(320-w)/2;g.beginPath();if(g.roundRect)g.roundRect(x0,14,w,56,28);else g.rect(x0,14,w,56);g.fill();
+  g.fillStyle=fg;g.textAlign='center';g.textBaseline='middle';g.fillText(word,160,43);
+  const t=new THREE.CanvasTexture(cv);t.encoding=THREE.sRGBEncoding;texCache[key]=t;return t;}
+function makeLabel(word,fg,bg,w){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTex(word,fg,bg),transparent:true,depthWrite:false}));const Wd=w||3;s.scale.set(Wd,Wd*84/320,1);s.renderOrder=5;return s;}
+function setLabel(s,word,fg,bg){const t=labelTex(word,fg,bg);if(s.material.map!==t){s.material.map=t;s.material.needsUpdate=true;}}
+const bubbles=[];
+function say(obj,text,cls,dur){if(!obj)return;if(bubbles.length>7){const o=bubbles.shift();o.el.remove();}
+  const el=document.createElement('div');el.className='bub '+(cls||'');el.textContent=text;$('bubbles').appendChild(el);bubbles.push({el,obj,t:dur||2.6});}
+const vTmp=new THREE.Vector3();
+function stepBubbles(dt){for(let i=bubbles.length-1;i>=0;i--){const b=bubbles[i];b.t-=dt;b.obj.getWorldPosition(vTmp);vTmp.y+=2.4;vTmp.project(camera);
+  b.el.style.left=((vTmp.x+1)/2*innerWidth)+'px';b.el.style.top=((1-vTmp.y)/2*innerHeight)+'px';b.el.style.opacity=vTmp.z<1?Math.min(1,b.t*2):0;
+  if(b.t<=0){b.el.remove();bubbles.splice(i,1);}}}
+const tickerLines=[];
+function tick(msg){tickerLines.push({t:S?clockText(S.t):'0:00',msg});if(tickerLines.length>4)tickerLines.shift();const tk=$('ticker');tk.innerHTML='';
+  tickerLines.forEach(l=>{const d=document.createElement('div');d.dataset.t=l.t;d.textContent=l.msg;tk.appendChild(d);});}
+const clockText=t=>{t=Math.max(0,Math.floor(t));return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');};
+
+/* ================= assets ================= */
+function b64(b){const s=atob(b);const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u.buffer;}
+const gltfLoader=new THREE.GLTFLoader();const M={};
+function load(name){return new Promise(res=>{try{gltfLoader.parse(b64(ASSET_DATA[name]),'',g=>res(g),()=>res(null));}catch(e){res(null);}});}
+function prep(o,cast){o.traverse(c=>{if(c.isMesh){c.castShadow=!!cast;c.receiveShadow=true;const ms=Array.isArray(c.material)?c.material:[c.material];ms.forEach(m=>{if(m&&'metalness' in m){m.metalness=0;m.roughness=Math.max(0.8,m.roughness||0);}});}});return o;}
+function clone(name,cast){return M[name]?prep(M[name].scene.clone(),cast):new THREE.Group();}
+function fitLength(obj,len){obj.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(obj);const s=b.getSize(new THREE.Vector3());obj.scale.multiplyScalar(len/Math.max(s.x,s.z,0.001));obj.updateMatrixWorld(true);const b2=new THREE.Box3().setFromObject(obj);const c=b2.getCenter(new THREE.Vector3());const w=new THREE.Group();obj.position.set(-c.x,-b2.min.y,-c.z);w.add(obj);return w;}
+const skinTex={};
+function loadSkins(){return Promise.all(Object.keys(SKIN_DATA).map(k=>new Promise(res=>{new THREE.TextureLoader().load(SKIN_DATA[k],t=>{t.flipY=false;t.encoding=THREE.sRGBEncoding;t.magFilter=THREE.NearestFilter;skinTex[k]=t;res();},undefined,()=>res());})));}
+
+/* ---------- builders of objects ---------- */
+function makeHouse(){const g=new THREE.Group();const s=3.6;const kinds=['wallWoodDoor','wallWoodWindowShutters','wallWood','wallWoodWindowSmall'];
+  for(let k=0;k<4;k++){const w=clone(kinds[k],true);w.scale.setScalar(s);w.rotation.y=k*Math.PI/2;g.add(w);}
+  const r=clone(R()<.4?'roofHighPoint':'roofPoint',true);r.scale.setScalar(s);r.position.y=s;g.add(r);return g;}
+function makePerson(skin){const root=new THREE.Group();const body=new THREE.Group();root.add(body);const parts={};const src=M.basicCharacter&&M.basicCharacter.scene;
+  if(!src){const m=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,1.2,8),new THREE.MeshStandardMaterial({color:0xe08a2c}));m.position.y=.6;root.add(m);return {root,parts};}
+  const mat=new THREE.MeshStandardMaterial({map:skinTex[skin]||null,roughness:.85});src.updateMatrixWorld(true);
+  src.traverse(o=>{if(!o.isMesh)return;const geo=o.geometry.clone();geo.applyMatrix4(o.matrixWorld);geo.computeBoundingBox();const bb=geo.boundingBox;const nm=o.name||o.parent.name||'';
+    const piv=new THREE.Vector3();if(/Leg|Arm/.test(nm))piv.set((bb.min.x+bb.max.x)/2,bb.max.y,(bb.min.z+bb.max.z)/2);
+    geo.translate(-piv.x,-piv.y,-piv.z);const mesh=new THREE.Mesh(geo,mat);mesh.castShadow=true;const g=new THREE.Group();g.position.copy(piv);g.add(mesh);body.add(g);
+    if(/LegLeft/.test(nm))parts.ll=g;else if(/LegRight/.test(nm))parts.lr=g;else if(/ArmLeft/.test(nm))parts.al=g;else if(/ArmRight/.test(nm))parts.ar=g;});
+  body.scale.setScalar(0.085);return {root,parts};}
+function loadBox(w,h,d,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:0x8d6440,roughness:1}));m.position.set(0,y,z);m.castShadow=true;m.visible=false;return m;}
+function statusSprite(root,y){const s=makeLabel(' ','#fff','#c2412d',2.2);s.position.y=y;s.visible=false;root.add(s);return s;}
+function makeFiller(){const root=new THREE.Group();let mixer=null,act={};
+  if(M.RobotExpressive){const r=THREE.SkeletonUtils?THREE.SkeletonUtils.clone(M.RobotExpressive.scene):M.RobotExpressive.scene.clone();r.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;}});r.scale.setScalar(0.3);root.add(r);
+    mixer=new THREE.AnimationMixer(r);M.RobotExpressive.animations.forEach(c=>act[c.name]=mixer.clipAction(c));}
+  else{const m=new THREE.Mesh(new THREE.BoxGeometry(.8,1.3,.6),new THREE.MeshStandardMaterial({color:0xe8b23a}));m.position.y=.65;root.add(m);}
+  const loadMesh=loadBox(.7,.45,.5,1.05,-.4);root.add(loadMesh);
+  return {root,mixer,act,cur:null,loadMesh,statusS:statusSprite(root,2.35)};}
+function makeCarrier(){const root=new THREE.Group();const t=M.truck?fitLength(prep(M.truck.scene.clone(),true),2.6):new THREE.Mesh(new THREE.BoxGeometry(1.4,1,2.4),new THREE.MeshStandardMaterial({color:0xe8b23a}));root.add(t);
+  const loadMesh=loadBox(1,.55,1.1,1.15,-.45);root.add(loadMesh);
+  return {root,mixer:null,act:{},cur:null,loadMesh,statusS:statusSprite(root,2.6)};}
+function anim(b,name){if(!b.mixer)return;const a=b.act[name];if(!a||b.cur===a)return;a.reset().fadeIn(.2).play();if(b.cur)b.cur.fadeOut(.2);b.cur=a;}
+
+/* ================= pathfinding (A*) ================= */
+const gScore=new Float32Array(N*N),came=new Int32Array(N*N),closed=new Uint8Array(N*N),inOpen=new Uint8Array(N*N);
+let occ=new Int16Array(N*N);
+function astar(start,isGoal,target,agent){
+  gScore.fill(1e9);closed.fill(0);inOpen.fill(0);came.fill(-1);
+  const s=idx(start.i,start.j);gScore[s]=0;const open=[s];inOpen[s]=1;let iter=0;
+  const h=k=>target?Math.abs((k%N)-target.i)+Math.abs(((k/N)|0)-target.j):0;
+  while(open.length&&iter++<3000){
+    let bi=0,bf=1e9;for(let q=0;q<open.length;q++){const k=open[q];const f=gScore[k]+h(k);if(f<bf){bf=f;bi=q;}}
+    const cur=open[bi];open[bi]=open[open.length-1];open.pop();inOpen[cur]=0;
+    const cc=cells[cur];if(isGoal(cc)){const path=[];let k=cur;while(k!==s&&k>=0){path.push(k);k=came[k];}return path.reverse();}
+    closed[cur]=1;
+    for(const nb of nb4(cc)){const k=idx(nb.i,nb.j);if(closed[k]||!passable(cc,nb))continue;
+      let cost=1+Math.abs(nb.h-cc.h)*0.35+(nb.type==='road'?-0.35:0);
+      if(agent&&agent.robot&&occ[k]&&occ[k]!==agent.id)cost+=agent.avoid&&agent.avoid.has(k)?20:2.5;
+      const g=gScore[cur]+cost;if(g<gScore[k]){gScore[k]=g;came[k]=cur;if(!inOpen[k]){open.push(k);inOpen[k]=1;}}}
+  }
+  return null;
+}
+const adjTo=t=>c=>md(c,t)===1;
+
+/* ================= state ================= */
+let S=null,agents=[],houses=[],running=false,speed=1,paused=false,tool='view',sel=null;
+let pileLabels=[];
+/* ================= Season 1 stage definitions =================
+   Everything a stage changes lives here; the engine below only reads these fields. */
+const SEASON='S1';
+const STAGES=[
+  {id:'S1-01',no:'第1話',title:'穴が開いております',minutes:5,duration:300,seed:101,money:80,
+   lead:'道路のあちこちが陥没しています。住民は原因をめぐって口論していますが、ロボットには関係ありません。土砂の流れとロボットの動かし方を覚える話です。',
+   robots:{filler:2,carrier:1},builders:[],bystanders:[{skin:'man',at:[9,14],label:'住民'},{skin:'woman',at:[13,21],label:'住民'}],
+   tools:['view','prio','erase'],buy:['filler','carrier'],quarryReg:true,
+   potholes:{every:[3.6,5.6],houseFactor:0,initial:[[11,20],[5,15],[12,27],[18,15],[11,10]]},
+   events:[{t:150,traffic:1.5,msg:'夕方の通勤時間になった。交通量が増え、陥没が増える'}],
+   victory:[{key:'roadEnd',v:0.8,label:'終了時の道路健全度80%以上'},{key:'roadAvg',v:0.85,label:'期間中の道路健全度の平均85%以上'}],
+   people:'住民2人。陥没の原因をめぐって口論している',unlock:'修復優先度・土砂運搬'},
+  {id:'S1-02',no:'第2話',title:'掘るなとは言っていない',minutes:8,duration:480,seed:202,money:120,
+   lead:'建設業者が基礎を掘り、ロボットが埋め、業者が掘り直す。双方が正しい仕事をしているせいで、工事が終わりません。',
+   robots:{filler:2,carrier:1},
+   builders:[{t:0,skin:'adventurer',at:[14,18],label:'建設業者A'},{t:40,skin:'manAlternative',at:[9,17],label:'建設業者B'},{t:150,skin:'adventurer',at:[10,28],label:'建設業者C'}],
+   bystanders:[],tools:['view','nofill','prio','erase','quarry'],buy:['filler','carrier'],quarryReg:false,cure:22,pile0:12,
+   potholes:{every:[11,16],houseFactor:0.2,initial:[[11,20],[5,15],[12,27]]},events:[],
+   victory:[{key:'houses',v:3,label:'住宅3棟の竣工'},{key:'roadEnd',v:0.8,label:'終了時の道路健全度80%以上'}],
+   people:'建設業者3社（順に参入）。区画の基礎を掘って残土を脇に積み、22秒養生してから家を建てる',unlock:'埋戻禁止区域・工事区域'},
+  {id:'S1-03',no:'第3話',title:'ここは私の土地です',minutes:10,locked:true,lead:'境界争いから塀が建つ。撤去すれば建て直され、残せば配送が止まる。'},
+  {id:'S1-04',no:'第4話',title:'土はどこへ行った',minutes:12,locked:true,lead:'修復が進むほど採土場が広がり、運搬路が混み、土砂の供給が止まる。'},
+  {id:'S1-05',no:'最終話',title:'担当者は休暇中',minutes:10,locked:true,lead:'ここまでの仕組みで公社を設計し、介入できない自律運転試験に臨む。'}];
+let STAGE=STAGES[0];
+const SAVE_KEY='anaume-season1';
+function loadProgress(){try{return JSON.parse(localStorage.getItem(SAVE_KEY)||'{}')||{};}catch(e){return {};}}
+function saveProgress(p){try{localStorage.setItem(SAVE_KEY,JSON.stringify(p));}catch(e){}}
+function newStats(){return{t:0,money:STAGE.money,houses:0,filled:0,travel:0,moved:0,waste:0,workT:0,botT:0,roadSamples:0,roadSum:0,redigs:0,quarryFills:0,
+  jams:0,waitT:0,spawned:{},evDone:{},replans:0,aborts:0,abortCells:0,earned:0,spent:0,potT:9,traffic:1,road:1,stage:0,said:{},ended:false,soil0:0};}
+function once(key,msg){if(S.said[key])return;S.said[key]=true;tick(msg);}
+
+/* ---------- agents ---------- */
+let nextId=1;
+function placeAt(a,c){a.cell=c;a.root.position.set(W(c.i),top(c),W(c.j));if(a.robot)occ[idx(c.i,c.j)]=a.id;}
+function freeNear(c){if(!occ[idx(c.i,c.j)]&&!c.bld&&c.type!=='quarry')return c;for(let r=1;r<6;r++)for(let di=-r;di<=r;di++)for(let dj=-r;dj<=r;dj++){const n=C(c.i+di,c.j+dj);if(n&&!n.bld&&!occ[idx(n.i,n.j)]&&n.type!=='quarry'&&!n.plot)return n;}return c;}
+function addFiller(at){const b=makeFiller();const n=agents.filter(x=>x.kind==='filler').length+1;
+  const a=Object.assign(b,{id:nextId++,robot:true,kind:'filler',name:'埋戻1号・'+n+'番機',state:'seek',path:[],load:0,cap:2,speed:2.7,target:null,source:null,timer:0,wait:0,talk:rnd(1,4),avoid:null,reason:null,doing:'待機',tripCells:0});
+  scene.add(a.root);placeAt(a,at||freeNear(C(DEPOT[0]-1,DEPOT[1])));agents.push(a);anim(a,'Idle');return a;}
+function addCarrier(at){const b=makeCarrier();const n=agents.filter(x=>x.kind==='carrier').length+1;
+  const a=Object.assign(b,{id:nextId++,robot:true,kind:'carrier',name:'運搬3号・'+n+'番機',state:'seek',path:[],load:0,cap:6,speed:2.3,target:null,timer:0,wait:0,talk:2,avoid:null,reason:null,doing:'待機',tripCells:0});
+  scene.add(a.root);placeAt(a,at||freeNear(C(DEPOT[0],DEPOT[1]-1)));agents.push(a);return a;}
+function addBuilder(skin,at,label){const {root,parts}=makePerson(skin);const tag=makeLabel(label,'#fff','#e08a2c',1.9);tag.position.y=1.95;root.add(tag);
+  const a={id:nextId++,robot:false,kind:'builder',name:label,root,parts,state:'choose',path:[],speed:2.1,plot:null,timer:0,talk:2,phase:rnd(0,6),tractor:null,spoilK:0,redig:0,doing:'区画を探している'};
+  scene.add(root);placeAt(a,at);agents.push(a);return a;}
+
+const ARGUE=[['水道局のせいだ！','いや、トラックが悪い！'],['行政は何をしてる！','税金を払ってるんだぞ！'],['昔はこんな穴なかった','昔のほうが穴だらけだった'],['責任者を出せ！','責任者はどこだ！']];
+const CLAIM=['ほら、我々の抗議の成果だ','やっと行政が動いた','私が電話したからだ'];
+function addBystander(b){const {root,parts}=makePerson(b.skin);const tag=makeLabel(b.label,'#fff','#6e9a5b',1.6);tag.position.y=1.95;root.add(tag);
+  const a={id:nextId++,robot:false,kind:'bystander',name:b.label,root,parts,state:'idle',path:[],speed:1.7,timer:rnd(1,3),talk:0,phase:rnd(0,6),target:null,doing:'散歩中',line:0};
+  scene.add(root);placeAt(a,C(b.at[0],b.at[1]));agents.push(a);return a;}
+function stepBystander(a,dt){a.phase+=dt*8;let moving=false;
+  if(a.needReplan){a.needReplan=false;a.path=[];a.state='idle';a.timer=1;}
+  if(a.state==='idle'){a.timer-=dt;if(a.timer<=0){
+      const holes=cells.filter(c=>c.type==='road'&&deficit(c)>0.35).sort((x,y)=>md(x,a.cell)-md(y,a.cell));
+      if(holes.length&&R()<0.8){a.target=holes[Math.floor(R()*Math.min(3,holes.length))];const path=astar(a.cell,c=>md(c,a.target)===1&&c!==a.target,a.target,a);if(path){a.path=path;a.state='walk';a.doing='陥没を見に行く';}else a.timer=2;}
+      else{const roads=cells.filter(c=>c.type==='road');const d=roads[Math.floor(R()*roads.length)];const path=astar(a.cell,c=>c===d,d,a);if(path){a.path=path.slice(0,10);a.state='walk';a.target=null;a.doing='散歩中';}else a.timer=2;}}}
+  else if(a.state==='walk'){moving=!followPath(a,dt);if(!moving){if(a.target&&deficit(a.target)>0.35){a.state='argue';a.timer=rnd(6,9);a.talk=0;a.doing='口論中';}else{a.state='idle';a.timer=rnd(1,3);}}}
+  else if(a.state==='argue'){a.timer-=dt;a.talk-=dt;
+    if(deficit(a.target)<=0.35){say(a.root,CLAIM[Math.floor(R()*CLAIM.length)]);a.state='idle';a.timer=rnd(3,5);}
+    else{if(a.talk<=0){const pair=ARGUE[Math.floor(R()*ARGUE.length)];say(a.root,pair[a.line++%2]);a.talk=rnd(2.4,3.4);}
+      if(a.timer<=0){a.state='idle';a.timer=rnd(1,3);}}
+    a.root.rotation.y=Math.atan2(W(a.target.i)-a.root.position.x,W(a.target.j)-a.root.position.z);}
+  const sw=moving?Math.sin(a.phase)*0.7:(a.state==='argue'?Math.sin(a.phase*0.9)*0.5:0);
+  if(a.parts.ll){a.parts.ll.rotation.x=moving?sw:0;a.parts.lr.rotation.x=moving?-sw:0;a.parts.al.rotation.x=a.state==='argue'?-1.6+sw:-sw;a.parts.ar.rotation.x=moving?sw:0;}
+  if(!moving)a.root.position.y=top(a.cell);}
+
+/* ---------- movement ---------- */
+function setReason(a,r){a.reason=r;}
+function followPath(a,dt){
+  if(!a.path.length)return true;
+  const k=a.path[0];const nxt=cells[k];
+  if(!passable(a.cell,nxt)){a.path=[];a.needReplan=true;return false;}
+  if(a.robot&&occ[k]&&occ[k]!==a.id){a.wait+=dt;S.waitT+=dt;setReason(a,'渋滞待ち');
+    if(a.wait>1.4){a.wait=0;a.avoid=new Set([k]);a.needReplan=true;a.path=[];S.jams++;S.replans++;
+      if(a.talk<=0){say(a.root,'経路を再計算します','robot');a.talk=4;}
+      if(S.jams>6)once('jam','ロボットどうしが道を譲り合っている。坂の手前で渋滞が起きている');}
+    return false;}
+  a.wait=0;if(a.reason==='渋滞待ち')setReason(a,null);
+  const p=a.root.position,tx=W(nxt.i),tz=W(nxt.j);const dx=tx-p.x,dz=tz-p.z,d=Math.hypot(dx,dz);
+  const sp=a.speed*CS*(nxt.type==='road'?1.15:1)*dt;
+  if(a.robot&&a.reserved==null){occ[k]=a.id;a.reserved=k;}
+  if(d<=sp){p.x=tx;p.z=tz;if(a.robot){const ck=idx(a.cell.i,a.cell.j);if(occ[ck]===a.id)occ[ck]=0;occ[k]=a.id;a.reserved=null;S.travel+=1;a.tripCells++;S.money-=0.03;S.spent+=0.03;}
+    a.cell=nxt;a.path.shift();return !a.path.length;}
+  p.x+=dx/d*sp;p.z+=dz/d*sp;a.root.rotation.y=Math.atan2(dx,dz);
+  const f=Math.max(0,1-d/CS);p.y=top(a.cell)*(1-f)+top(nxt)*f;
+  return false;}
+function goAdj(a,t){const path=astar(a.cell,c=>adjTo(t)(c),t,a);if(path===null)return false;a.path=path;a.avoid=null;return true;}
+function goTo(a,c){const path=astar(a.cell,x=>x===c,c,a);if(path===null)return false;a.path=path;a.avoid=null;return true;}
+function releaseRes(a){if(a.reserved!=null){if(occ[a.reserved]===a.id)occ[a.reserved]=0;a.reserved=null;}}
+function abortTrip(a){S.aborts++;S.abortCells+=a.tripCells;a.tripCells=0;}
+
+/* ---------- holes & soil (conserved) ---------- */
+let holeList=[],holeT=0;
+function isHoleForRobots(c){if(c.bld||c.type==='pile'||c.zone===1)return false;if(c.type==='quarry'&&siteReg(c))return false;return deficit(c)>0.35;}
+function refreshHoles(){holeList=cells.filter(isHoleForRobots);}
+function pileStock(c){return Math.max(0,excess(c));}
+function takeSoil(c,amt,floor){const avail=Math.max(0,c.h-floor);const t=Math.max(0,Math.min(amt,avail));c.h-=t;touch(c);
+  if(c.robotFill>0){const w=Math.min(t,c.robotFill);c.robotFill-=w;S.waste+=w;}return t;}
+function putSoil(c,amt,byRobot){c.h+=amt;touch(c);if(!byRobot)return;
+  S.filled+=amt;S.moved+=amt;
+  if(c.type==='quarry'){S.waste+=amt;S.quarryFills+=amt;once('qloop','埋戻機が採土場の掘り跡を「穴」として検知し、埋め戻し始めた');}
+  else c.robotFill+=amt;
+  if(c.type==='road'){const r=amt*2;S.money+=r;S.earned+=r;}}
+function totalSoil(){let s=0;for(const c of cells)s+=c.h;for(const a of agents)if(a.robot)s+=a.load;return s;}
+
+/* ---------- filler robot: refills only from soil piles ---------- */
+function nearestPile(a,target){let best=null,bs=1e9;for(const c of cells){if(c.type!=='pile'||pileStock(c)<0.3||c.unreach>S.t)continue;
+  const d=md(c,a.cell)+(target?md(c,target):0);if(d<bs){bs=d;best=c;}}return best;}
+function stepFiller(a,dt){
+  a.talk-=dt;S.botT+=dt;
+  if(a.needReplan){a.needReplan=false;releaseRes(a);
+    if(a.state==='toSource'&&a.source){if(!goAdj(a,a.source)){a.source.unreach=S.t+6;setReason(a,'経路なし');a.state='seek';}}
+    else if(a.state==='toHole'&&a.target){if(!goAdj(a,a.target)){a.target.unreach=S.t+6;a.target.claim=0;a.target=null;setReason(a,'経路なし');abortTrip(a);a.state='seek';}}
+    else a.state='seek';}
+  if(a.state==='seek'){
+    a.timer-=dt;if(a.timer>0)return;
+    let best=null,bs=1e9;
+    for(const c of holeList){if(c.claim&&c.claim!==a.id)continue;if(c.unreach>S.t)continue;
+      let s=md(c,a.cell)-Math.min(3,deficit(c))*1.5;if(c.zone===2)s-=100;/* every low cell looks the same to a robot unless the player marks priority */if(s<bs){bs=s;best=c;}}
+    if(!best){anim(a,'Idle');a.doing='待機';setReason(a,holeList.length?'届く穴がない':'仕事なし');
+      if(Math.abs(a.cell.i-DEPOT[0])+Math.abs(a.cell.j-DEPOT[1])>4){goTo(a,freeNear(C(DEPOT[0]-2,DEPOT[1]+1)));a.state='home';}a.timer=0.6;return;}
+    if(a.load<Math.min(1,deficit(best))){const p=nearestPile(a,best);
+      if(!p){anim(a,'Idle');a.doing='補給待ち';setReason(a,'土砂不足（置き場が空）');if(a.talk<=0){say(a.root,'土砂が不足しています','robot alarm');a.talk=7;}
+        once('empty','置き場の土砂が切れた。埋戻機が補給を待っている');a.timer=1;return;}
+      a.target=best;best.claim=a.id;a.source=p;setReason(a,null);
+      if(goAdj(a,p)){a.state='toSource';a.doing='置き場へ補給に向かう';a.tripCells=0;}else{p.unreach=S.t+6;best.claim=0;a.target=null;setReason(a,'経路なし');a.timer=0.5;}
+      if(a.talk<=0){say(a.root,'穴を検知しました','robot');a.talk=5;}return;}
+    a.target=best;best.claim=a.id;setReason(a,null);
+    if(goAdj(a,best)){a.state='toHole';a.doing='穴へ向かう';a.tripCells=0;if(a.talk<=0){say(a.root,'穴を検知しました','robot');a.talk=5;}}
+    else{best.unreach=S.t+6;best.claim=0;a.target=null;setReason(a,'経路なし');a.timer=0.5;}
+    return;}
+  if(a.state==='home'){if(holeList.length){a.timer-=dt;if(a.timer<=0){a.path=[];releaseRes(a);a.state='seek';}}anim(a,a.path.length?'Walking':'Idle');followPath(a,dt);return;}
+  if(a.target&&!isHoleForRobots(a.target)&&a.state!=='loading'){a.target.claim=0;a.target=null;abortTrip(a);if(a.state!=='toSource'){a.state='seek';a.path=[];releaseRes(a);return;}}
+  if(a.state==='toSource'){anim(a,'Running');if(followPath(a,dt)&&!a.needReplan){a.state='loading';a.timer=0.8;a.doing='置き場で積み込み中';}return;}
+  if(a.state==='loading'){anim(a,'Punch');S.workT+=dt;a.timer-=dt;if(Math.random()<dt*14)emit(W(a.source.i),top(a.source)+.2,W(a.source.j),0x8d6440,1,1.2,4);
+    if(a.timer<=0){const got=takeSoil(a.source,a.cap-a.load,a.source.base);a.load+=got;
+      if(a.load<0.3){if(a.target){a.target.claim=0;a.target=null;}a.state='seek';a.timer=0.8;return;}
+      if(a.target){if(goAdj(a,a.target)){a.state='toHole';a.doing='穴へ運ぶ';}else{a.target.claim=0;a.target=null;setReason(a,'経路なし');a.state='seek';}}else a.state='seek';}
+    return;}
+  if(a.state==='toHole'){anim(a,a.load>0?'Running':'Walking');if(followPath(a,dt)&&!a.needReplan){a.state='filling';a.timer=0;a.doing='埋め戻し中';}return;}
+  if(a.state==='filling'){anim(a,'Punch');S.workT+=dt;a.timer-=dt;const t=a.target;
+    if(!t){a.state='seek';return;}
+    if(a.timer<=0){a.timer=0.22;const amt=Math.min(0.35,a.load,Math.max(0,deficit(t)));putSoil(t,amt,true);a.load-=amt;a.tripCells=0;
+      emit(W(t.i),top(t)+.15,W(t.j),0x8d6440,3,1.1,3);
+      if(deficit(t)<=0.02){t.claim=0;a.target=null;a.state='seek';a.timer=0;if(a.talk<=0&&R()<.5){say(a.root,'作業完了','robot');a.talk=4;}}
+      else if(a.load<=0.01){a.state='seek';a.timer=0;}}
+    return;}
+}
+
+/* ---------- carrier robot: quarry / spoil heaps -> pile ---------- */
+function pileWithSpace(a){let best=null,bs=1e9;for(const c of cells){if(c.type!=='pile'||pileStock(c)>=12)continue;const d=md(c,a.cell)+pileStock(c)*1.6;if(d<bs){bs=d;best=c;}}return best;} // emptier piles are served first
+function carrierSource(a){let best=null,bs=1e9;for(const c of cells){if(c.bld||c.unreach>S.t)continue;let ok=false,bias=0;
+    if(c.type==='quarry'&&c.h>0.6){ok=true;bias=-c.h*0.4;}else if(c.type==='grass'&&excess(c)>=0.5&&!c.plot){ok=true;bias=-2;}
+    if(!ok)continue;const d=md(c,a.cell)+bias;if(d<bs){bs=d;best=c;}}return best;}
+function stepCarrier(a,dt){
+  a.talk-=dt;S.botT+=dt;
+  if(a.needReplan){a.needReplan=false;releaseRes(a);a.state='seek';}
+  if(a.state==='seek'){a.timer-=dt;if(a.timer>0)return;
+    if(a.load>0.3){const p=pileWithSpace(a);
+      if(!p){setReason(a,cells.some(c=>c.type==='pile')?'置き場が満杯':'置き場がない');a.doing='荷下ろし待ち';if(a.talk<=0){say(a.root,a.reason,'robot');a.talk=8;}a.timer=1;return;}
+      a.pile=p;setReason(a,null);if(goAdj(a,p)){a.state='toPile';a.doing='置き場へ運ぶ';}else{setReason(a,'経路なし');a.timer=0.8;}return;}
+    if(!pileWithSpace(a)){setReason(a,cells.some(c=>c.type==='pile')?'置き場が満杯':'置き場がない');a.doing='待機';a.timer=1;return;}
+    const src=carrierSource(a);
+    if(!src){setReason(a,'採取できる土砂がない');a.doing='待機';if(a.talk<=0){say(a.root,'土砂が不足しています','robot alarm');a.talk=8;}once('dry','採土場も残土の山も尽きた。運ぶ土がない');a.timer=1;return;}
+    a.dig=src;setReason(a,null);
+    if(goAdj(a,src)){a.state='toSource';a.doing=src.type==='quarry'?'採土場へ向かう':'残土の山へ向かう';a.tripCells=0;}else{src.unreach=S.t+5;setReason(a,'経路なし');a.timer=0.4;}return;}
+  if(a.state==='toSource'){if(followPath(a,dt)&&!a.needReplan){a.state='digging';a.timer=0;a.doing=a.dig.type==='quarry'?'採土中':'残土を積み込み中';}return;}
+  if(a.state==='digging'){S.workT+=dt;a.timer-=dt;if(a.timer<=0){a.timer=0.3;let c=a.dig;
+      const floor=x=>x.type==='quarry'?0.6:x.base;
+      if(c.h-floor(c)<0.05){const alt=nb4(a.cell).filter(x=>(x.type==='quarry'&&x.h>0.6)||(x.type==='grass'&&excess(x)>0.3&&!x.plot)).sort((p,q)=>q.h-p.h)[0];if(alt)c=a.dig=alt;}
+      const got=takeSoil(c,Math.min(0.6,a.cap-a.load),floor(c));a.load+=got;emit(W(c.i),top(c)+.2,W(c.j),0x8d6440,4,1.2,4);
+      if(a.load>=a.cap-0.01||got<0.05){a.state='seek';a.timer=0;}}
+    return;}
+  if(a.state==='toPile'){if(followPath(a,dt)&&!a.needReplan){a.state='unloading';a.timer=0.6;a.doing='荷下ろし中';}return;}
+  if(a.state==='unloading'){S.workT+=dt;a.timer-=dt;if(a.timer<=0){const room=Math.max(0,12.5-pileStock(a.pile));const put=Math.min(a.load,room);putSoil(a.pile,put,false);S.moved+=put;a.load-=put;a.tripCells=0;
+      emit(W(a.pile.i),top(a.pile)+.3,W(a.pile.j),0x8d6440,16,1.5,4);a.state='seek';a.timer=0;}return;}
+}
+
+/* ---------- builders ---------- */
+let plots=[];
+function setupPlots(){plots=PLOTS.map(([pi,pj])=>{const cs=[];for(let a=0;a<3;a++)for(let b=0;b<3;b++)cs.push(C(pi+a,pj+b));
+  const sides=[[3,0],[-1,0],[0,3],[0,-1]];let spoil=null;
+  for(const [di,dj] of sides){const sc=[];for(let k=0;k<3;k++){const c=di?C(pi+di,pj+k):C(pi+k,pj+dj);if(c&&c.type==='grass'&&!c.bld)sc.push(c);}if(sc.length===3){spoil=sc;break;}}
+  const p={pi,pj,cells:cs,spoil:spoil||[],state:'free',builder:null,cure:0,center:C(pi+1,pj+1),label:null};
+  cs.forEach(c=>c.plot=p);return p;});}
+function plotLabel(p,txt,bg){if(!p.label){p.label=makeLabel(txt,'#fff',bg,3.2);scene.add(p.label);}else setLabel(p.label,txt,'#fff',bg);
+  p.label.position.set(W(p.center.i),top(p.center)+3.6,W(p.center.j));p.label.visible=true;}
+const inPlot=(p,c)=>c.plot===p;
+function stepBuilder(a,dt){
+  a.talk-=dt;a.phase+=dt*8;let moving=false;
+  if(a.needReplan){a.needReplan=false;a.path=[];if(a.state==='walk'){if(a.plot){a.plot.state='free';a.plot=null;}a.state='choose';}}
+  if(a.state==='choose'){const free=plots.filter(p=>p.state==='free');if(!free.length){a.state='rest';a.timer=4;a.doing='空き区画がない';return;}
+    free.sort((p,q)=>md(p.center,a.cell)-md(q.center,a.cell));
+    const p=free[0];const path=astar(a.cell,c=>!inPlot(p,c)&&c.type!=='quarry'&&nb4(c).some(n=>inPlot(p,n))&&!p.spoil.includes(c),p.center,a);
+    if(!path){p.state='blocked';a.state='rest';a.timer=3;return;}
+    p.state='taken';p.builder=a;a.plot=p;a.path=path;a.state='walk';a.doing='区画へ向かう';plotLabel(p,'基礎工事予定','#e08a2c');return;}
+  if(a.state==='rest'){a.timer-=dt;if(a.timer<=0){plots.forEach(p=>{if(p.state==='blocked')p.state='free';});a.state='choose';}}
+  else if(a.state==='walk'){moving=!followPath(a,dt);if(!moving&&!a.needReplan){a.state='dig';a.timer=0;showTractor(a,true);a.doing='基礎を掘削中';if(a.talk<=0){say(a.root,'基礎を掘ります');a.talk=6;}plotLabel(a.plot,'基礎工事中','#e08a2c');}}
+  else if(a.state==='dig'){a.timer-=dt;
+    if(a.timer<=0){a.timer=0.28;const p=a.plot;
+      const tgt=p.cells.filter(c=>deficit(c)<1.6).sort((x,y)=>deficit(x)-deficit(y))[0];
+      if(!tgt){a.state='cure';p.cure=STAGE.cure||14;showTractor(a,false);a.doing='養生中';if(a.talk<=0){say(a.root,'基礎ができた。養生します');a.talk=5;}return;}
+      const amt=Math.min(0.3,1.6-deficit(tgt));
+      tgt.h-=amt;touch(tgt);if(tgt.robotFill>0){const w=Math.min(amt,tgt.robotFill);tgt.robotFill-=w;S.waste+=w;}
+      if(p.spoil.length){const sp=p.spoil[a.spoilK++%p.spoil.length];sp.h+=amt;touch(sp);}else{const sp=nb4(a.cell).find(x=>x.type==='grass'&&!x.plot)||a.cell;sp.h+=amt;touch(sp);}
+      emit(W(tgt.i),top(tgt)+.2,W(tgt.j),0x8d6440,3,1.2,4);}}
+  else if(a.state==='cure'){const p=a.plot;p.cure-=dt;plotLabel(p,'養生中 '+Math.ceil(p.cure)+'秒','#5f7fb8');
+    if(p.cells.some(c=>deficit(c)<1.35)){a.redig++;S.redigs++;a.state='dig';a.timer=0.5;showTractor(a,true);a.doing='掘り直し中';plotLabel(p,'掘り直し中','#c2412d');
+      if(a.talk<=0){say(a.root,a.redig>2?'また埋められてる…（'+a.redig+'回目）':'あれ、埋まってる…','alarm');a.talk=5;}
+      if(S.redigs>=2)once('redig','建設業者：基礎を掘るたびに、ロボットが埋め戻してしまう');
+      if(S.redigs>=4&&!S.said.hint){S.said.hint=true;$('tip').textContent='公社メモ：ロボットは「低いマス」をすべて穴と判定します。工事中の区画をどう扱うかは、指示しないと伝わりません。';}
+      return;}
+    if(p.cure<=0){build(p);a.state='choose';a.plot=null;a.redig=0;say(a.root,'竣工しました');a.talk=5;}}
+  const sw=moving?Math.sin(a.phase)*0.7:(a.state==='dig'?Math.sin(a.phase*1.4)*0.8:0);
+  if(a.parts.ll){a.parts.ll.rotation.x=sw;a.parts.lr.rotation.x=-sw;a.parts.al.rotation.x=a.state==='dig'?-1.1+sw*.4:-sw;a.parts.ar.rotation.x=a.state==='dig'?-1.1-sw*.4:sw;}
+  if(!moving)a.root.position.y=top(a.cell);
+  if(a.plot&&(a.state==='dig'||a.state==='cure')){const p=a.plot;a.root.rotation.y=Math.atan2(W(p.center.i)-a.root.position.x,W(p.center.j)-a.root.position.z);}
+}
+function showTractor(a,on){if(on){if(!a.tractor){a.tractor=M.tractorShovel?fitLength(prep(M.tractorShovel.scene.clone(),true),2.8):new THREE.Mesh(new THREE.BoxGeometry(1.6,1,1),new THREE.MeshStandardMaterial({color:0xe0a030}));scene.add(a.tractor);}
+  const p=a.plot;a.tractor.visible=true;const dx=a.cell.i-p.center.i,dz=a.cell.j-p.center.j;a.tractor.position.set(W(a.cell.i)+dz*0.6,top(a.cell),W(a.cell.j)-dx*0.6);a.tractor.rotation.y=Math.atan2(-dx,-dz);}
+  else if(a.tractor)a.tractor.visible=false;}
+// the house is built on the dug foundation: no soil appears, the design height is lowered instead
+function build(p){p.state='built';p.cells.forEach(c=>{c.base=c.h;c.robotFill=0;c.bld='house';c.claim=0;touch(c);});
+  const hs=makeHouse();hs.position.set(W(p.center.i),top(p.center),W(p.center.j));hs.scale.set(1,0.01,1);scene.add(hs);houses.push({g:hs,t:0});
+  S.houses++;S.money+=20;S.earned+=20;emit(W(p.center.i),top(p.center)+1,W(p.center.j),0xe8b23a,40,2.5,6);
+  plotLabel(p,'竣工','#3f7a46');setTimeout(()=>{if(p.label)p.label.visible=false;},3000);
+  tick(`住宅が竣工した（${S.houses}棟目）`);}
+
+/* ---------- world: potholes push soil to the roadside, contract stages ---------- */
+function stepWorld(dt){
+  const P=STAGE.potholes;S.potT-=dt;if(S.potT<=0){S.potT=rnd(P.every[0],P.every[1])/((1+S.houses*P.houseFactor)*S.traffic);
+    const roads=cells.filter(c=>c.type==='road'&&!c.bld&&deficit(c)<0.3&&!occ[idx(c.i,c.j)]);
+    for(let tries=0;tries<8&&roads.length;tries++){const c=roads[Math.floor(R()*roads.length)];
+      const side=nb4(c).filter(n=>n.type==='grass'&&!n.bld&&!n.plot);if(!side.length)continue;const sd=side[Math.floor(R()*side.length)];
+      const d=rnd(0.8,1.3);c.h-=d;sd.h+=d;touch(c);touch(sd);emit(W(c.i),top(c)+.3,W(c.j),0x6b6f75,14,1.4,4);break;}}
+  const bots=agents.filter(a=>a.robot).length;const up=bots*0.02*dt;S.money-=up;S.spent+=up;
+  const roads=cells.filter(c=>c.type==='road');const ok=roads.filter(c=>deficit(c)<0.35).length/roads.length;S.road=ok;S.roadSum+=ok*dt;S.roadSamples+=dt;
+  STAGE.builders.forEach((b,k)=>{if(!S.spawned[k]&&S.t>=b.t){S.spawned[k]=true;addBuilder(b.skin,C(b.at[0],b.at[1]),b.label);if(b.t>0)tick(`${b.label}が工事を始めた`);}});
+  STAGE.events.forEach((e,k)=>{if(!S.evDone[k]&&S.t>=e.t){S.evDone[k]=true;if(e.traffic)S.traffic=e.traffic;tick(e.msg);}});
+  if(S.money<0)once('red','資金が赤字になった。マイナス40で契約解除');
+}
+
+/* ================= player tools ================= */
+const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+function setNdc(ev){const r=canvas.getBoundingClientRect();ndc.set(((ev.clientX-r.left)/r.width)*2-1,-((ev.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,camera);}
+function cellAt(ev){setNdc(ev);const hit=ray.intersectObject(columns)[0];return hit&&hit.instanceId!=null?cells[hit.instanceId]:null;}
+function agentAt(ev){setNdc(ev);const hits=ray.intersectObjects(agents.map(a=>a.root),true);for(const h of hits){let o=h.object;while(o){const a=agents.find(x=>x.root===o);if(a)return a;o=o.parent;}}return null;}
+let painting=false,downAt=null,paintVal=null;const activePtr=new Set();
+canvas.addEventListener('pointerdown',e=>{activePtr.add(e.pointerId);downAt=[e.clientX,e.clientY];
+  if(e.button===0&&activePtr.size===1&&tool!=='view'&&S&&!S.ended){painting=true;paintVal=null;applyTool(cellAt(e),true);}else painting=false;});
+canvas.addEventListener('pointermove',e=>{if(activePtr.size>1)painting=false;if(painting&&(tool==='nofill'||tool==='prio'||tool==='erase'||tool==='newq'))applyTool(cellAt(e),false);});
+addEventListener('pointerup',e=>{const wasTap=downAt&&Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])<7&&activePtr.size<=1;activePtr.delete(e.pointerId);painting=false;
+  if(wasTap&&e.target===canvas&&tool==='view'&&S){select(agentAt(e));}downAt=null;});
+addEventListener('pointercancel',e=>{activePtr.delete(e.pointerId);painting=false;});
+const TIPS={view:'ドラッグで回転、ピンチやホイールで拡大。ロボットや人をタップすると、作業内容と経路が出ます。',
+  nofill:'埋戻禁止：塗ったマスをロボットは穴として扱いません。もう一度塗ると解除。右ドラッグか2本指で視点を回せます。',
+  prio:'優先区域：塗ったマスの穴を、ロボットが最優先で埋めに行きます。右ドラッグか2本指で視点を回せます。',
+  erase:'区域を消す：禁止・優先の指定を外します。',
+  pile:'置き場（15）：草地に土砂置き場を作ります。運搬機はここへ運び、埋戻機はここからだけ補給します。',
+  quarry:'採土場の登録：採土場のマスをタップすると、その採土場だけ用途を登録・解除します。登録するとロボットは掘り跡を穴として扱いません。',
+  newq:'採土場を指定（10）：草地を採土場にします。隣り合うマスは同じ採土場になります。新しい採土場は未登録で始まります。'};
+function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===t)));$('tip').textContent=TIPS[t];
+  if(t==='view'){controls.mouseButtons={LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN};controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};}
+  else{controls.mouseButtons={LEFT:null,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.ROTATE};controls.touches={ONE:null,TWO:THREE.TOUCH.DOLLY_ROTATE};}}
+document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+function applyTool(c,first){if(!c||!S)return;
+  if(tool==='nofill'||tool==='prio'){const v=tool==='nofill'?1:2;if(first)paintVal=c.zone===v?0:v;if(c.bld)return;if(c.zone!==paintVal){c.zone=paintVal;touch(c);if(c.zone===1)c.claim=0;}}
+  else if(tool==='erase'){if(c.zone){c.zone=0;touch(c);}}
+  else if(tool==='pile'&&first){if(c.type!=='grass'||c.bld||c.plot){$('tip').textContent='置き場は、工事区画以外の草地にしか作れません。';return;}
+    if(S.money<15){$('tip').textContent='資金が足りません。';return;}S.money-=15;S.spent+=15;c.type='pile';c.base=c.h;touch(c);addPileLabel(c);tick('土砂置き場を新設した');}
+  else if(tool==='quarry'&&first){if(c.type!=='quarry'){$('tip').textContent='採土場のマスをタップしてください。';return;}
+    const s=sites[c.site];s.reg=!s.reg;cells.forEach(x=>{if(x.type==='quarry'&&x.site===c.site){touch(x);if(s.reg)x.claim=0;}});updateSiteLabel(c.site);
+    tick(s.reg?`${s.name}の用途を登録した。ロボットは掘り跡を穴として扱わない`:`${s.name}の登録を取り消した`);}
+  else if(tool==='newq'){if(c.type!=='grass'||c.bld||c.plot||c.decor||occ[idx(c.i,c.j)]){if(first)$('tip').textContent='採土場にできるのは、工事区画以外の草地です。';return;}
+    if(S.money<10){$('tip').textContent='資金が足りません。';return;}S.money-=10;S.spent+=10;
+    const nbq=nb4(c).find(x=>x.type==='quarry');let sid;if(nbq)sid=nbq.site;else{sid=Object.keys(sites).length+1;sites[sid]={reg:false,name:'第'+sid+'採土場',label:null,cells:[]};tick(`${sites[sid].name}を街の中に指定した（未登録）`);}
+    c.type='quarry';c.site=sid;touch(c);updateSiteLabel(sid);}
+}
+function addPileLabel(c){const l=makeLabel('土砂置き場','#fff','#6b4a2e',2.6);l.position.set(W(c.i),top(c)+2.4,W(c.j));scene.add(l);pileLabels.push({l,c});}
+function updateSiteLabel(id){const s=sites[id];const cs=cells.filter(c=>c.type==='quarry'&&c.site===id);if(!cs.length)return;
+  if(!s.label){s.label=makeLabel('','#fff','#c2412d',3.6);scene.add(s.label);}
+  setLabel(s.label,s.name+(s.reg?'（登録済）':'（用途未登録）'),'#fff',s.reg?'#5f6e80':'#c2412d');
+  const ci=cs.reduce((a,c)=>a+c.i,0)/cs.length,cj=cs.reduce((a,c)=>a+c.j,0)/cs.length;s.label.position.set(W(ci),Math.max(...cs.map(c=>c.base))*HS+3.2,W(cj));}
+$('buyFill').addEventListener('click',()=>{if(!S||S.money<40)return;S.money-=40;S.spent+=40;addFiller();tick('埋戻機を1台購入した');});
+$('buyCarry').addEventListener('click',()=>{if(!S||S.money<55)return;S.money-=55;S.spent+=55;addCarrier();tick('運搬機を1台購入した');});
+document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>{speed=+b.dataset.speed;document.querySelectorAll('[data-speed]').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));}));
+$('pauseBtn').addEventListener('click',()=>{paused=!paused;$('pauseBtn').setAttribute('aria-pressed',String(paused));$('pauseBtn').textContent=paused?'再開':'停止';});
+addEventListener('keydown',e=>{if(e.code==='Space'&&S&&$('startOv').hidden&&$('endOv').hidden){e.preventDefault();$('pauseBtn').click();}});
+$('foldBtn').addEventListener('click',()=>{const f=$('toolbox').classList.toggle('folded');$('foldBtn').textContent=f?'指示を出す':'指示を畳む';$('foldBtn').setAttribute('aria-expanded',String(!f));});
+
+/* ================= inspection ================= */
+const pathGeo=new THREE.BufferGeometry();const pathArr=new Float32Array(3*220);pathGeo.setAttribute('position',new THREE.BufferAttribute(pathArr,3));
+const pathLine=new THREE.Line(pathGeo,new THREE.LineDashedMaterial({color:0xffffff,dashSize:0.5,gapSize:0.3,depthTest:false,transparent:true,opacity:0.9}));pathLine.renderOrder=10;pathLine.frustumCulled=false;pathLine.visible=false;scene.add(pathLine);
+const ring=new THREE.Mesh(new THREE.RingGeometry(0.75,0.95,32),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false,transparent:true}));ring.rotation.x=-Math.PI/2;ring.renderOrder=10;ring.visible=false;scene.add(ring);
+function select(a){if(sel&&sel.target)touch(sel.target);sel=a;$('inspect').hidden=!a;ring.visible=!!a;pathLine.visible=!!a;if(a&&a.target)touch(a.target);if(a)updateInspect();}
+$('closeInspect').addEventListener('click',()=>select(null));
+function where(c){if(!c)return '—';const kind=c.type==='road'?'道路':c.type==='pile'?'土砂置き場':c.type==='quarry'?(sites[c.site]?sites[c.site].name:'採土場'):c.plot?'工事区画':'草地';return `${kind}（${c.i},${c.j}）`;}
+function updateInspect(){const a=sel;if(!a)return;
+  $('insName').textContent=a.name;
+  const rows=[];
+  if(a.robot){rows.push(['作業',a.doing]);rows.push(['積載',`${a.load.toFixed(1)} / ${a.cap}`]);
+    const dest=a.kind==='filler'?(a.state==='toSource'||a.state==='loading'?a.source:a.target):(a.state==='toPile'||a.state==='unloading'?a.pile:a.dig);
+    rows.push(['目的地',where(dest)]);
+    if(a.kind==='filler'&&a.target)rows.push(['担当の穴',`${where(a.target)}　深さ ${deficit(a.target).toFixed(1)}`]);
+    rows.push(['経路',a.path.length?`あと${a.path.length}マス`:'—']);
+    rows.push(['停止理由',a.reason||'なし']);}
+  else{rows.push(['作業',a.doing]);if(a.plot)rows.push(['区画',where(a.plot.center)]);rows.push(['掘り直し',a.redig+'回']);}
+  $('insBody').innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd${k==='停止理由'&&v!=='なし'?' class="bad"':''}>${v}</dd>`).join('');
+}
+function drawSelection(){const a=sel;if(!a)return;const p=a.root.position;ring.position.set(p.x,p.y+0.05,p.z);
+  let n=0;pathArr[0]=p.x;pathArr[1]=p.y+0.25;pathArr[2]=p.z;n=1;for(const k of a.path){if(n>=219)break;const c=cells[k];pathArr[n*3]=W(c.i);pathArr[n*3+1]=top(c)+0.25;pathArr[n*3+2]=W(c.j);n++;}
+  pathGeo.setDrawRange(0,n);pathGeo.attributes.position.needsUpdate=true;pathLine.computeLineDistances();pathLine.visible=n>1;}
+
+/* ================= HUD & report ================= */
+const STATUS_COL={'渋滞待ち':'#c98a12','仕事なし':'#5f6e80','置き場が満杯':'#c98a12'};
+function hud(){
+  $('clk').textContent=clockText(S.t)+' / '+clockText(STAGE.duration);$('clkProg').style.width=Math.min(100,S.t/STAGE.duration*100)+'%';
+  const mm=$('mMoney');mm.textContent=Math.round(S.money);mm.className=S.money<0?'neg':'';
+  const hv=STAGE.victory.find(v=>v.key==='houses');$('mHouseBox').hidden=!hv;if(hv){const mh=$('mHouse');mh.textContent=S.houses+' / '+hv.v;mh.className=S.houses>=hv.v?'ok':'';}
+  const mr=$('mRoad');mr.textContent=Math.round(S.road*100)+'%';mr.className=S.road<0.8?'warn':'ok';
+  const qTot=cells.filter(c=>c.type==='quarry').reduce((s,c)=>s+Math.max(0,c.h-0.6),0);const pTot=cells.filter(c=>c.type==='pile').reduce((s,c)=>s+pileStock(c),0);
+  const mq=$('mQuarry');mq.textContent=Math.round(qTot);mq.className=qTot<20?'neg':'';$('mPile').textContent=pTot.toFixed(1);$('mPile').className=pTot<1?'neg':'';
+  $('mWaste').textContent=S.waste.toFixed(1);$('mWaste').className=S.waste>10?'neg':'';
+  const nf=agents.filter(a=>a.kind==='filler').length,nc=agents.filter(a=>a.kind==='carrier').length;$('fleet').textContent=`埋戻機 ${nf}・運搬機 ${nc}`;
+  $('buyFill').disabled=S.money<40;$('buyCarry').disabled=S.money<55;
+  for(const a of agents){if(!a.statusS)continue;const r=a.reason;a.statusS.visible=!!r;if(r)setLabel(a.statusS,r,'#fff',STATUS_COL[r]||'#c2412d');}
+  if(sel)updateInspect();
+}
+function report(kind){
+  S.ended=true;running=false;
+  const roadAvg=S.roadSum/Math.max(1,S.roadSamples);
+  const val={roadEnd:S.road,roadAvg,houses:S.houses};
+  const res=STAGE.victory.map(v=>({...v,ok:kind!=='bankrupt'&&val[v.key]>=v.v,got:v.key==='houses'?S.houses+'棟':Math.round(val[v.key]*100)+'%'}));
+  const ok=res.every(r=>r.ok);S.cleared=ok;
+  if(ok&&!S.extended){const pr=loadProgress();pr[STAGE.id]={cleared:true,best:Math.max((pr[STAGE.id]||{}).best||0,Math.round(roadAvg*100))};saveProgress(pr);}
+  $('endKind').textContent=(kind==='bankrupt'?'契約解除通知書':'業務完了報告書')+'　'+STAGE.no+'「'+STAGE.title+'」';
+  $('endTitle').textContent=kind==='bankrupt'?'資金が尽き、契約を解除された':ok?'契約目標を達成した':'契約目標に届かなかった';
+  $('endText').innerHTML=`経過 ${clockText(S.t)}、資金 ${Math.round(S.money)}。<ul class="conds">${res.map(r=>`<li class="${r.ok?'ok':'ng'}">${r.ok?'達成':'未達'}：${r.label}（${r.got}）</li>`).join('')}</ul>`;
+  const eff=S.moved>0?(S.travel/S.moved):0;const util=S.botT>0?S.workT/S.botT:0;const err=totalSoil()-S.soil0;
+  const rows=[
+    ['修復実績',S.filled.toFixed(1),'ロボットが埋め戻した土砂の量'],
+    ['物流効率',eff.toFixed(1),'運んだ土砂1あたりのロボットの移動マス数（小さいほど効率的）'],
+    ['稼働率',Math.round(util*100)+'%','ロボットが積み込み・埋め戻し・採土・荷下ろしをしていた時間の割合'],
+    ['都市機能',`住宅${S.houses}棟・道路平均${Math.round(S.roadSum/Math.max(1,S.roadSamples)*100)}%`,'竣工した住宅と、期間中の道路健全度の平均'],
+    ['財政',(S.earned-S.spent>=0?'+':'')+Math.round(S.earned-S.spent),`収入 ${Math.round(S.earned)}・支出 ${Math.round(S.spent)}`],
+    ['迷走記録',S.waste.toFixed(1),`埋めたあと掘り返された土砂と、採土場へ戻された土砂。基礎の掘り直し${S.redigs}回、採土場への埋め戻し${S.quarryFills.toFixed(1)}`],
+    ['迷走の内訳',`${Math.round(S.waitT)}秒`,`渋滞待ちの合計時間。経路の再計算${S.replans}回、着く前に仕事が消えた無駄足${S.aborts}回（${S.abortCells}マス）`],
+    ['土量の収支',(Math.abs(err)<0.005?'0.00':err.toFixed(2)),`開始時の総土量 ${S.soil0.toFixed(1)} との差。掘っても埋めても、竣工しても土は増減しない`]];
+  $('evalBody').innerHTML=rows.map((r,i)=>`<tr class="${i===5||i===6?'hi':''}"><th>${r[0]}</th><td class="v">${r[1]}</td><td class="d">${r[2]}</td></tr>`).join('');
+  const ni=STAGES.indexOf(STAGE)+1;$('nextBtn').hidden=!(ok&&STAGES[ni]&&!STAGES[ni].locked);
+  $('contBtn').hidden=kind==='bankrupt';$('endOv').hidden=false;(!$('nextBtn').hidden?$('nextBtn'):$('againBtn')).focus();
+}
+$('contBtn').addEventListener('click',()=>{$('endOv').hidden=true;S.ended=false;S.extended=true;running=true;});
+$('againBtn').addEventListener('click',()=>{start(STAGE);});
+$('nextBtn').addEventListener('click',()=>{openBrief(STAGES[STAGES.indexOf(STAGE)+1]);});
+$('menuBtn').addEventListener('click',()=>{$('endOv').hidden=true;showMenu();});
+
+/* ================= loop ================= */
+function simStep(dt){S.t+=dt;holeT-=dt;if(holeT<=0){refreshHoles();holeT=0.3;}
+  stepWorld(dt);for(const a of agents){if(a.kind==='filler')stepFiller(a,dt);else if(a.kind==='carrier')stepCarrier(a,dt);else if(a.kind==='builder')stepBuilder(a,dt);else stepBystander(a,dt);if(a.mixer)a.mixer.update(dt);}
+  if(!S.ended&&S.money<-40){report('bankrupt');return false;}
+  if(S.t>=STAGE.duration&&!S.extended&&!S.ended){report('term');return false;}return true;}
+const clock=new THREE.Clock();let spin=0;
+const STEP=0.05;let acc=0; // the simulation always advances in fixed 0.05 s steps, independent of frame rate
+function frame(){requestAnimationFrame(frame);const raw=Math.min(0.1,clock.getDelta());
+  if(running&&!paused){acc=Math.min(acc+raw*speed,STEP*12);while(acc>=STEP){acc-=STEP;if(!simStep(STEP)){acc=0;break;}}
+    agents.forEach(a=>{if(a.loadMesh)a.loadMesh.visible=a.load>0.05;});hud();}
+  else if(!S){spin+=raw*0.05;camera.position.set(Math.sin(spin)*52,40,Math.cos(spin)*52);}
+  houses.forEach(h=>{if(h.t<1){h.t=Math.min(1,h.t+raw*0.7);const e=1-Math.pow(1-h.t,3);h.g.scale.set(1,Math.max(0.01,e),1);}});
+  if(S){syncCells(false);pileLabels.forEach(p=>p.l.position.y=top(p.c)+2.4);drawSelection();}
+  stepParticles(raw);stepBubbles(raw);controls.update();renderer.render(scene,camera);}
+
+/* ================= boot ================= */
+let decor=[];
+function start(stage){
+  STAGE=stage||STAGE;R=mulberry32(STAGE.seed);acc=0;
+  agents.forEach(a=>{scene.remove(a.root);if(a.tractor)scene.remove(a.tractor);});agents=[];houses.forEach(h=>scene.remove(h.g));houses=[];
+  plots.forEach(p=>{if(p.label)scene.remove(p.label);});pileLabels.forEach(p=>scene.remove(p.l));pileLabels=[];decor.forEach(d=>scene.remove(d));decor=[];
+  Object.values(sites).forEach(s=>{if(s.label)scene.remove(s.label);});
+  bubbles.forEach(b=>b.el.remove());bubbles.length=0;tickerLines.length=0;select(null);
+  occ=new Int16Array(N*N);nextId=1;sites={1:{reg:!!STAGE.quarryReg,name:'第1採土場',label:null}};
+  initCells();setupPlots();S=newStats();
+  PREBUILT.forEach(([pi,pj])=>{const h=makeHouse();h.position.set(W(pi+1),top(C(pi+1,pj+1)),W(pj+1));scene.add(h);decor.push(h);});
+  const dc=C(DEPOT[0],DEPOT[1]);const dep=clone('stallRed',true);dep.scale.setScalar(1.6);dep.position.set(W(dc.i),top(dc),W(dc.j));scene.add(dep);decor.push(dep);
+  const dl=makeLabel('穴埋め公社','#1d1a14','#e8b23a',3.4);dl.position.set(W(dc.i),top(dc)+3,W(dc.j));scene.add(dl);decor.push(dl);
+  const treeNames=['tree_pineDefaultA','tree_pineRoundC','tree_default_fall','tree_oak_fall','tree_pineTallA_detailed'];
+  for(let k=0;k<70;k++){const i=Math.floor(rnd(0,N)),j=Math.floor(rnd(0,N));const c=C(i,j);
+    const edge=i<1||j>30||(i>=PLATEAU.i0&&(j<1||i>30))||(i===PLATEAU.i0-1&&j<8)||(j===PLATEAU.j1+1&&i>=PLATEAU.i0+1);
+    if(!edge||c.type!=='grass'||c.bld||c.plot||c.decor)continue;c.decor=true;const t=clone(treeNames[k%treeNames.length],true);t.scale.setScalar(rnd(1.6,2.4));t.position.set(W(i),top(c),W(j));t.rotation.y=rnd(0,6);scene.add(t);decor.push(t);}
+  for(let k=0;k<24;k++){const a=rnd(0,6.28),r=rnd(27,45);const t=clone(treeNames[k%treeNames.length],true);t.scale.setScalar(rnd(2.2,3.4));t.position.set(Math.cos(a)*r,0,Math.sin(a)*r);scene.add(t);decor.push(t);}
+  // initial stockpile holds soil taken earlier from the quarry (moved, not created)
+  const pc=C(PILE0[0],PILE0[1]);pc.type='pile';pc.base=pc.h;
+  const P0=STAGE.pile0||7;let need=P0;for(const q of cells.filter(c=>c.type==='quarry')){if(need<=0)break;const t=Math.min(need,0.8);q.h-=t;need-=t;}pc.h+=P0;addPileLabel(pc);updateSiteLabel(1);
+  // existing potholes, their soil pushed to the roadside
+  STAGE.potholes.initial.forEach(([i,j])=>{const c=C(i,j);const sd=nb4(c).find(n=>n.type==='grass'&&!n.bld&&!n.plot);if(sd){c.h-=1.3;sd.h+=1.3;}});
+  S.soil0=totalSoil();
+  syncCells(true);
+  const fpos=[[13,13],[15,13],[13,14],[15,14]],cpos=[[16,12],[16,13]];
+  for(let k=0;k<STAGE.robots.filler;k++)addFiller(C(...fpos[k]));for(let k=0;k<STAGE.robots.carrier;k++)addCarrier(C(...cpos[k]));
+  STAGE.bystanders.forEach(addBystander);
+  document.querySelectorAll('[data-tool]').forEach(b=>{b.hidden=!STAGE.tools.includes(b.dataset.tool);});
+  $('buyFill').hidden=!STAGE.buy.includes('filler');$('buyCarry').hidden=!STAGE.buy.includes('carrier');
+  tick(`${STAGE.no}「${STAGE.title}」開始`);setTool('view');
+  $('briefOv').hidden=true;$('startOv').hidden=true;$('endOv').hidden=true;running=true;paused=false;$('pauseBtn').setAttribute('aria-pressed','false');$('pauseBtn').textContent='停止';
+  camera.position.set(22,30,36);controls.target.set(2,2,6);hud();
+}
+$('startBtn').addEventListener('click',()=>start(pending));
+$('backBtn').addEventListener('click',()=>{$('briefOv').hidden=true;showMenu();});
+let pending=STAGES[0],ready=false;
+function showMenu(){running=false;const pr=loadProgress();const ol=$('epList');ol.innerHTML='';
+  STAGES.forEach(st=>{const li=document.createElement('li');const b=document.createElement('button');b.type='button';b.className='ep';b.disabled=!!st.locked||!ready;
+    const cl=pr[st.id]&&pr[st.id].cleared;
+    b.innerHTML=`<span class="no">${st.no}</span><span class="tt">${st.title}</span><span class="st${cl?' clear':''}">${st.locked?'準備中':cl?'達成':'約'+st.minutes+'分'}</span><span class="bl">${st.lead}</span>`;
+    b.addEventListener('click',()=>openBrief(st));li.appendChild(b);ol.appendChild(li);});
+  $('loadNote').hidden=ready;$('startOv').hidden=false;}
+function openBrief(st){pending=st;$('endOv').hidden=true;$('startOv').hidden=true;
+  $('briefKind').textContent=`業務委託契約書　シーズン1 ${st.no}`;$('briefTitle').textContent=st.title;$('briefLead').textContent=st.lead;
+  const tools={nofill:'埋戻禁止',prio:'優先区域',erase:'区域を消す',quarry:'採土場の登録',pile:'置き場',newq:'採土場を指定'};
+  const rows=[['契約期間',`${st.minutes}分（×3で早送りできます）`],['契約目標',st.victory.map(v=>v.label).join('、')],
+    ['報酬',`道路の穴を埋めた土砂1につき2${st.builders.length?'、住宅1棟の竣工支援につき20':''}。ロボットの維持費と燃料費は公社負担。資金がマイナス40を下回ると契約解除。初期資金 ${st.money}`],
+    ['支給品',`埋戻機${st.robots.filler}台（土砂置き場からしか補給できない）、運搬機${st.robots.carrier}台（採土場や残土の山から置き場へ運ぶ）、置き場1か所、採土場1か所${st.quarryReg?'（用途登録済み）':''}`],
+    ['人間',st.people],['使える指示',st.tools.filter(t=>t!=='view').map(t=>tools[t]).join('・')+'、ロボットの購入']];
+  $('briefTerms').innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('briefOv').hidden=false;$('startBtn').focus();}
+(async function boot(){
+  await Promise.all(Object.keys(ASSET_DATA).map(async n=>{const g=await load(n);if(g){M[n]=g;if(n!=='RobotExpressive')prep(g.scene,false);}}));
+  await loadSkins();
+  ready=true;showMenu();
+})();
+initCells();syncCells(true);showMenu();
+frame();
+})();
+</script>
