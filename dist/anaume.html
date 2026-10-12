@@ -41,6 +41,11 @@ button:focus-visible{outline:2px solid var(--robot);outline-offset:2px}
 .buy button[disabled]{opacity:.4;cursor:not-allowed}
 .fold{display:none;justify-self:end;color:var(--dim);background:transparent;border:0;font-size:11.5px;padding:0 2px;cursor:pointer}
 .toolbox.folded .tools,.toolbox.folded .buy,.toolbox.folded .tip{display:none}
+.memo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 132px);width:min(440px,calc(100vw - 24px));background:var(--paper);color:#24211b;border-radius:4px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:12px 14px;display:grid;gap:10px;font-size:14px;line-height:1.6;z-index:5}
+.memo p{margin:0}
+.memo-row{display:flex;gap:8px;flex-wrap:wrap}
+.memo-row button{min-height:44px;padding:8px 14px;border-radius:3px;border:1px solid #24211b;background:#24211b;color:var(--paper);font-weight:700;cursor:pointer}
+.memo-row button+button{background:transparent;color:#24211b}
 .inspect{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 92px);width:min(300px,calc(100vw - 24px));padding:10px 12px;display:grid;gap:6px;font-size:12.5px}
 .ins-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ins-head b{font-size:14px}
@@ -203,6 +208,11 @@ table.eval{width:100%;border-collapse:collapse;font-size:13px}
     </div>
     <div class="tip" id="tip">ドラッグで回転、ピンチやホイールで拡大。道具を選ぶと、マスをタップまたはなぞって指示できます。</div>
   </div>
+</div>
+
+<div class="memo" id="memo" hidden role="status">
+  <p id="memoText"></p>
+  <div class="memo-row"><button type="button" id="memoTool">埋戻禁止を選ぶ</button><button type="button" id="memoClose">閉じる</button></div>
 </div>
 
 <div class="inspect panel" id="inspect" hidden aria-live="polite">
@@ -639,7 +649,7 @@ function stepBuilder(a,dt){
     if(p.cells.some(c=>deficit(c)<1.35)){a.redig++;S.redigs++;a.state='dig';a.timer=0.5;showTractor(a,true);a.doing='掘り直し中';plotLabel(p,'掘り直し中','#c2412d');
       if(a.talk<=0){say(a.root,a.redig>2?'また埋められてる…（'+a.redig+'回目）':'あれ、埋まってる…','alarm');a.talk=5;}
       if(S.redigs>=2)once('redig','建設業者：基礎を掘るたびに、ロボットが埋め戻してしまう');
-      if(S.redigs>=4&&!S.said.hint){S.said.hint=true;$('tip').textContent='公社メモ：ロボットは「低いマス」をすべて穴と判定します。工事中の区画をどう扱うかは、指示しないと伝わりません。';}
+      if(S.redigs>=3&&!S.said.hint){S.said.hint=true;showMemo('公社メモ：ロボットは低いマスをすべて「穴」と判定します。工事中の区画も例外ではありません。埋戻禁止にしたい区画は、道具「埋戻禁止」で区画のマスを1つタップすると、区画全体に指定できます。');}
       return;}
     if(p.cure<=0){build(p);a.state='choose';a.plot=null;a.redig=0;say(a.root,'竣工しました');a.talk=5;}}
   const sw=moving?Math.sin(a.phase)*0.7:(a.state==='dig'?Math.sin(a.phase*1.4)*0.8:0);
@@ -684,7 +694,7 @@ addEventListener('pointerup',e=>{const wasTap=downAt&&Math.hypot(e.clientX-downA
   if(wasTap&&e.target===canvas&&tool==='view'&&S){select(agentAt(e));}downAt=null;});
 addEventListener('pointercancel',e=>{activePtr.delete(e.pointerId);painting=false;});
 const TIPS={view:'ドラッグで回転、ピンチやホイールで拡大。ロボットや人をタップすると、作業内容と経路が出ます。',
-  nofill:'埋戻禁止：塗ったマスをロボットは穴として扱いません。もう一度塗ると解除。右ドラッグか2本指で視点を回せます。',
+  nofill:'埋戻禁止：塗ったマスをロボットは穴として扱いません。工事区画は1マスタップで区画全体に指定。もう一度タップで解除。右ドラッグか2本指で視点を回せます。',
   prio:'優先区域：塗ったマスの穴を、ロボットが最優先で埋めに行きます。右ドラッグか2本指で視点を回せます。',
   erase:'区域を消す：禁止・優先の指定を外します。',
   pile:'置き場（15）：草地に土砂置き場を作ります。運搬機はここへ運び、埋戻機はここからだけ補給します。',
@@ -696,7 +706,10 @@ function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b
 document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 function applyTool(c,first){if(!c||!S)return;
-  if(tool==='nofill'||tool==='prio'){const v=tool==='nofill'?1:2;if(first)paintVal=c.zone===v?0:v;if(c.bld)return;if(c.zone!==paintVal){c.zone=paintVal;touch(c);if(c.zone===1)c.claim=0;}}
+  if(tool==='nofill'||tool==='prio'){const v=tool==='nofill'?1:2;if(first)paintVal=c.zone===v?0:v;if(c.bld)return;
+    const group=(first&&c.plot&&c.plot.state!=='built')?c.plot.cells:[c];  /* one tap on a plot marks the whole plot */
+    for(const x of group){if(x.bld||x.zone===paintVal)continue;x.zone=paintVal;touch(x);if(x.zone===1)x.claim=0;}
+    if(first&&c.plot&&group.length>1)tick(paintVal===1?'工事区画を埋戻禁止にした':paintVal===2?'工事区画を優先区域にした':'工事区画の指定を外した');}
   else if(tool==='erase'){if(c.zone){c.zone=0;touch(c);}}
   else if(tool==='pile'&&first){if(c.type!=='grass'||c.bld||c.plot){$('tip').textContent='置き場は、工事区画以外の草地にしか作れません。';return;}
     if(S.money<15){$('tip').textContent='資金が足りません。';return;}S.money-=15;S.spent+=15;c.type='pile';c.base=c.h;touch(c);addPileLabel(c);tick('土砂置き場を新設した');}
@@ -748,6 +761,11 @@ syncBgmBtn();
 addEventListener('pointerdown',()=>BGM.play(),{once:true});
 addEventListener('keydown',()=>BGM.play(),{once:true});
 $('bgmBtn').addEventListener('click',()=>{BGM.on=!BGM.on;try{localStorage.setItem('anaume-bgm',BGM.on?'on':'off');}catch(e){}syncBgmBtn();if(BGM.on)BGM.play();});
+
+/* ================= memo ================= */
+function showMemo(text){$('memoText').textContent=text;$('memoTool').hidden=!STAGE.tools.includes('nofill');$('memo').hidden=false;}
+$('memoClose').addEventListener('click',()=>{$('memo').hidden=true;});
+$('memoTool').addEventListener('click',()=>{setTool('nofill');$('memo').hidden=true;if(compactTools.matches)setToolsFolded(true);});
 
 /* ================= inspection ================= */
 const pathGeo=new THREE.BufferGeometry();const pathArr=new Float32Array(3*220);pathGeo.setAttribute('position',new THREE.BufferAttribute(pathArr,3));
@@ -838,7 +856,7 @@ function start(stage){
   agents.forEach(a=>{scene.remove(a.root);if(a.tractor)scene.remove(a.tractor);});agents=[];houses.forEach(h=>scene.remove(h.g));houses=[];
   plots.forEach(p=>{if(p.label)scene.remove(p.label);});pileLabels.forEach(p=>scene.remove(p.l));pileLabels=[];decor.forEach(d=>scene.remove(d));decor=[];
   Object.values(sites).forEach(s=>{if(s.label)scene.remove(s.label);});
-  bubbles.forEach(b=>b.el.remove());bubbles.length=0;tickerLines.length=0;select(null);
+  bubbles.forEach(b=>b.el.remove());bubbles.length=0;tickerLines.length=0;select(null);$('memo').hidden=true;
   occ=new Int16Array(N*N);nextId=1;sites={1:{reg:!!STAGE.quarryReg,name:'第1採土場',label:null}};
   initCells();setupPlots();S=newStats();
   PREBUILT.forEach(([pi,pj])=>{const h=makeHouse();h.position.set(W(pi+1),top(C(pi+1,pj+1)),W(pj+1));scene.add(h);decor.push(h);});
